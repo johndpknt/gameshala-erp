@@ -1,0 +1,33 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Composer
+/vendor/
+composer.phar
+
+# CodeIgniter writable
+/writable/cache/*
+/writable/logs/*
+/writable/session/*
+/writable/uploads/*
+!writable/cache/index.html
+!writable/logs/index.html
+!writable/session/index.html
+!writable/uploads/index.html
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# PHPUnit
+phpunit.xml
+.phpunit.result.cache
+
+# Builds (optional)
+/builds/

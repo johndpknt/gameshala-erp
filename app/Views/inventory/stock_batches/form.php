@@ -1,0 +1,153 @@
+<?php
+$isEdit = $batch !== null;
+$formAction = $isEdit ? base_url('inventory/stock-batches/update/' . (int) $batch['id']) : base_url('inventory/stock-batches/create');
+$productId = old('product_id') ?? ($batch['product_id'] ?? '');
+$vendorId  = old('vendor_id') ?? ($batch['vendor_id'] ?? '');
+$ruleId    = old('procurement_rule_id') ?? ($batch['current_procurement_rule_id'] ?? '');
+$receivedAt = old('received_at') ?? ($batch['received_at'] ?? '');
+if ($receivedAt && strlen($receivedAt) >= 16) {
+    $receivedAt = date('Y-m-d\TH:i', strtotime($receivedAt));
+} elseif ($receivedAt && strlen($receivedAt) === 10) {
+    $receivedAt .= 'T00:00';
+}
+?>
+<div class="container py-4 px-3 px-sm-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <h1 class="h4 fw-semibold mb-0"><?= $isEdit ? 'Edit Stock Batch' : 'Add Stock Batch' ?></h1>
+        <a href="<?= base_url('inventory/stock-batches') ?>" class="btn btn-outline-secondary">Back to list</a>
+    </div>
+
+    <?= form_open($formAction, ['method' => 'post', 'class' => 'needs-validation', 'id' => 'batchForm']) ?>
+        <?= csrf_field() ?>
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="batch_code" class="form-label">Batch code <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="batch_code" name="batch_code" required maxlength="100"
+                                   value="<?= esc(old('batch_code', $batch['batch_code'] ?? '')) ?>" placeholder="e.g. BATCH-2024-001">
+                        </div>
+
+                        <?php
+$showProductSearch = count($products) > 10;
+$showVendorSearch  = count($vendors) > 10;
+?>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="product_id" class="form-label">Product <span class="text-danger">*</span></label>
+                                <?php if ($showProductSearch): ?>
+                                <input type="text" class="form-control mb-1" id="product_search" placeholder="Type to search products..." autocomplete="off" aria-label="Filter products">
+                                <?php endif; ?>
+                                <select class="form-select select-searchable" id="product_id" name="product_id" required data-search-input="product_search">
+                                    <option value="">— Select product —</option>
+                                    <?php foreach ($products as $p): ?>
+                                        <option value="<?= (int) $p['id'] ?>" data-search="<?= esc($p['name'] . ' ' . ($p['sku'] ?? '')) ?>"
+                                            <?= (string) $productId === (string) $p['id'] ? ' selected' : '' ?>>
+                                            <?= esc($p['name']) ?> (<?= esc($p['sku'] ?? '') ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="vendor_id" class="form-label">Vendor <span class="text-danger">*</span></label>
+                                <?php if ($showVendorSearch): ?>
+                                <input type="text" class="form-control mb-1" id="vendor_search" placeholder="Type to search vendors..." autocomplete="off" aria-label="Filter vendors">
+                                <?php endif; ?>
+                                <select class="form-select select-searchable" id="vendor_id" name="vendor_id" required data-search-input="vendor_search">
+                                    <option value="">— Select vendor —</option>
+                                    <?php foreach ($vendors as $v): ?>
+                                        <option value="<?= (int) $v['id'] ?>" data-search="<?= esc($v['name']) ?>"
+                                            <?= (string) $vendorId === (string) $v['id'] ? ' selected' : '' ?>>
+                                            <?= esc($v['name']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="procurement_rule_id" class="form-label">Procurement rule</label>
+                            <select class="form-select" id="procurement_rule_id" name="procurement_rule_id">
+                                <option value="">— No rule —</option>
+                                <?php foreach ($rules as $r): ?>
+                                    <option value="<?= (int) $r['id'] ?>" <?= (string) $ruleId === (string) $r['id'] ? ' selected' : '' ?>>
+                                        <?= esc($r['name']) ?> (<?= esc($r['discount_type'] ?? 'FLAT') ?>: <?= esc($r['discount_value'] ?? 0) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="purchased_qty" class="form-label">Purchased qty <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="purchased_qty" name="purchased_qty" required min="0" step="1"
+                                       value="<?= esc(old('purchased_qty', $batch['purchased_qty'] ?? '0')) ?>">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="remaining_qty" class="form-label">Remaining qty <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="remaining_qty" name="remaining_qty" required min="0" step="1"
+                                       value="<?= esc(old('remaining_qty', $batch['remaining_qty'] ?? '0')) ?>">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="unit_cost" class="form-label">Unit cost <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="unit_cost" name="unit_cost" required min="0" step="0.01"
+                                       value="<?= esc(old('unit_cost', $batch['unit_cost'] ?? '0')) ?>">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="received_at" class="form-label">Received at <span class="text-danger">*</span></label>
+                            <input type="datetime-local" class="form-control" id="received_at" name="received_at" required
+                                   value="<?= esc($receivedAt) ?>">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="remarks" class="form-label">Remarks</label>
+                            <textarea class="form-control" id="remarks" name="remarks" rows="2" maxlength="500" placeholder="Optional"><?= esc(old('remarks', $batch['remarks'] ?? '')) ?></textarea>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Update batch' : 'Add batch' ?></button>
+                        <a href="<?= base_url('inventory/stock-batches') ?>" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?= form_close() ?>
+</div>
+
+<script>
+(function () {
+    // Searchable select: filter options by data-search as user types (when search input exists)
+    document.querySelectorAll('.select-searchable').forEach(function (select) {
+        var inputId = select.getAttribute('data-search-input');
+        var input = inputId ? document.getElementById(inputId) : null;
+        if (!input) return;
+
+        function filterOptions() {
+            var term = (input.value || '').toLowerCase();
+            var options = select.querySelectorAll('option');
+            options.forEach(function (opt) {
+                if (opt.value === '') {
+                    opt.style.display = '';
+                    return;
+                }
+                var search = (opt.getAttribute('data-search') || opt.textContent || '').toLowerCase();
+                opt.style.display = term !== '' && search.indexOf(term) === -1 ? 'none' : '';
+            });
+        }
+
+        input.addEventListener('input', filterOptions);
+        input.addEventListener('keyup', filterOptions);
+        select.addEventListener('change', function () {
+            var opt = select.options[select.selectedIndex];
+            input.value = opt && opt.value ? (opt.getAttribute('data-search') || opt.textContent).trim() : '';
+        });
+        if (select.value) {
+            var selected = select.options[select.selectedIndex];
+            if (selected) input.value = (selected.getAttribute('data-search') || selected.textContent || '').trim();
+        }
+    });
+})();
+</script>

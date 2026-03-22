@@ -1,0 +1,289 @@
+/**
+ * Gameshala ERP – professional theme & interactivity
+ * Custom palette and transitions on top of Bootstrap 5
+ */
+
+:root {
+    --gs-primary: #2563eb;
+    --gs-primary-hover: #1d4ed8;
+    --gs-primary-light: #eff6ff;
+    --gs-header-bg: #0f172a;
+    --gs-header-text: #f8fafc;
+    --gs-header-hover: rgba(255, 255, 255, 0.1);
+    --gs-footer-bg: #0f172a;
+    --gs-footer-text: #94a3b8;
+    --gs-body-bg: #f1f5f9;
+    --gs-card-bg: #ffffff;
+    --gs-border: #e2e8f0;
+    --gs-text: #1e293b;
+    --gs-text-muted: #64748b;
+    --gs-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --gs-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --gs-radius: 8px;
+    --gs-transition: 0.2s ease;
+}
+
+body {
+    background-color: var(--gs-body-bg);
+    color: var(--gs-text);
+    transition: background-color var(--gs-transition), color var(--gs-transition);
+}
+
+/* ========== Header – professional slate ========== */
+.site-header .navbar {
+    background: var(--gs-header-bg) !important;
+    box-shadow: var(--gs-shadow);
+    padding: 0.5rem 0;
+}
+
+.site-header .navbar-brand {
+    color: var(--gs-header-text) !important;
+    font-weight: 600;
+    transition: opacity var(--gs-transition);
+}
+
+.site-header .navbar-brand:hover {
+    color: var(--gs-header-text) !important;
+    opacity: 0.9;
+}
+
+.site-header .nav-link {
+    color: rgba(248, 250, 252, 0.85) !important;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem !important;
+    border-radius: var(--gs-radius);
+    transition: background-color var(--gs-transition), color var(--gs-transition);
+}
+
+.site-header .nav-link:hover,
+.site-header .nav-link:focus {
+    color: #fff !important;
+    background-color: var(--gs-header-hover);
+}
+
+.site-header .navbar-toggler {
+    border-color: rgba(255, 255, 255, 0.3);
+    padding: 0.4rem 0.5rem;
+}
+
+.site-header .navbar-toggler:focus {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.site-header .navbar-toggler-icon {
+    filter: brightness(0) invert(1);
+}
+
+/* Dropdown – light menu with shadow */
+.site-header .dropdown-menu {
+    border: 1px solid var(--gs-border);
+    border-radius: var(--gs-radius);
+    box-shadow: var(--gs-shadow-hover);
+    padding: 0.35rem 0;
+    margin-top: 0.35rem;
+    animation: dropdownFade 0.2s ease;
+}
+
+@keyframes dropdownFade {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.site-header .dropdown-item {
+    padding: 0.5rem 1rem;
+    color: var(--gs-text);
+    font-weight: 500;
+    transition: background-color var(--gs-transition), color var(--gs-transition);
+}
+
+.site-header .dropdown-item:hover {
+    background-color: var(--gs-primary-light);
+    color: var(--gs-primary-hover);
+}
+
+.site-header .dropdown-item:active {
+    background-color: var(--gs-primary-light);
+}
+
+/* Remove Bootstrap dark dropdown; we use light */
+.site-header .dropdown-menu-dark {
+    background: var(--gs-card-bg);
+}
+
+.site-header .dropdown-menu-dark .dropdown-item {
+    color: var(--gs-text);
+}
+
+.site-header .dropdown-menu-dark .dropdown-item:hover {
+    background-color: var(--gs-primary-light);
+    color: var(--gs-primary-hover);
+}
+
+.site-header .dropdown-toggle::after {
+    transition: transform var(--gs-transition);
+}
+
+.site-header .dropdown.show .dropdown-toggle::after {
+    transform: rotate(180deg);
+}
+
+/* Logo */
+.navbar-brand .logo-img {
+    height: 36px;
+    width: auto;
+    object-fit: contain;
+}
+
+/* ========== Main ========== */
+.site-main {
+    padding: 2rem 0;
+}
+
+/* ========== Footer ========== */
+.site-footer {
+    background: var(--gs-footer-bg) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.site-footer .footer-logo {
+    height: 32px;
+    width: auto;
+    object-fit: contain;
+    opacity: 0.95;
+}
+
+.site-footer .text-body-secondary {
+    color: var(--gs-footer-text) !important;
+}
+
+.site-footer a {
+    transition: color var(--gs-transition);
+}
+
+.site-footer a:hover {
+    color: #fff !important;
+}
+
+.site-footer .border-bottom {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ========== Buttons & links (global) ========== */
+.btn-primary {
+    background-color: var(--gs-primary);
+    border-color: var(--gs-primary);
+    transition: background-color var(--gs-transition), border-color var(--gs-transition), transform 0.15s ease;
+}
+
+.btn-primary:hover {
+    background-color: var(--gs-primary-hover);
+    border-color: var(--gs-primary-hover);
+    transform: translateY(-1px);
+}
+
+a:not(.nav-link):not(.dropdown-item):not(.btn) {
+    color: var(--gs-primary);
+    transition: color var(--gs-transition);
+}
+
+a:not(.nav-link):not(.dropdown-item):not(.btn):hover {
+    color: var(--gs-primary-hover);
+}
+
+/* ========== Responsive ========== */
+/* Prevent horizontal overflow */
+html {
+    overflow-x: hidden;
+}
+
+body {
+    overflow-x: hidden;
+}
+
+/* Header – mobile */
+@media (max-width: 991.98px) {
+    .site-header .navbar {
+        padding: 0.4rem 0;
+    }
+
+    .site-header .navbar-collapse {
+        margin-top: 0.5rem;
+        padding: 0.5rem 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .site-header .nav-link {
+        padding: 0.6rem 0.75rem !important;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    .site-header .dropdown-menu {
+        margin-top: 0;
+        margin-left: 0.75rem;
+        margin-bottom: 0.25rem;
+        box-shadow: none;
+        border: none;
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 6px;
+    }
+
+    .site-header .dropdown-menu-dark .dropdown-item {
+        color: rgba(248, 250, 252, 0.9);
+    }
+
+    .site-header .dropdown-menu-dark .dropdown-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+    }
+
+    .navbar-brand .logo-img {
+        height: 32px;
+    }
+}
+
+/* Touch-friendly toggler */
+@media (max-width: 991.98px) {
+    .site-header .navbar-toggler {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0.5rem;
+    }
+}
+
+/* Main – reduce padding on small screens */
+@media (max-width: 575.98px) {
+    .site-main {
+        padding: 1.25rem 0;
+    }
+}
+
+/* Footer – mobile */
+@media (max-width: 767.98px) {
+    .site-footer .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .site-footer .row {
+        gap: 1.5rem;
+    }
+
+    .site-footer .footer-logo {
+        height: 28px;
+    }
+}
+
+/* Icon + text spacing (Bootstrap Icons) */
+.bi.nav-icon { font-size: 1.1em; opacity: 0.9; }
+.quick-link-card__icon .bi { font-size: 1.15rem; }
+.btn .bi { font-size: 1em; }
+.btn .bi:first-child { margin-right: 0.35rem; }
+.btn .bi:last-child { margin-left: 0.35rem; }

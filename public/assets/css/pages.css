@@ -1,0 +1,91 @@
+/**
+ * Gameshala ERP – page content & interactive elements
+ */
+
+.content-block code {
+    background: var(--gs-primary-light, #eff6ff);
+    color: var(--gs-primary-hover, #1d4ed8);
+    padding: 0.2em 0.5em;
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+/* Interactive cards for index / dashboards */
+.quick-link-card {
+    background: var(--gs-card-bg, #fff);
+    border: 1px solid var(--gs-border, #e2e8f0);
+    border-radius: var(--gs-radius, 8px);
+    padding: 1.25rem;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.quick-link-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+    border-color: var(--gs-primary, #2563eb);
+    color: inherit;
+}
+
+.quick-link-card .card-title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.quick-link-card .card-desc {
+    font-size: 0.875rem;
+    color: var(--gs-text-muted, #64748b);
+    margin: 0;
+}
+
+/* Responsive typography */
+.page-title {
+    font-size: 1.75rem;
+    line-height: 1.25;
+}
+
+@media (min-width: 576px) {
+    .page-title {
+        font-size: 2rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .page-title {
+        font-size: 2.5rem;
+    }
+}
+
+/* Quick link cards – full width on small, touch-friendly */
+@media (max-width: 575.98px) {
+    .quick-link-card {
+        padding: 1rem 1.25rem;
+        min-height: 72px;
+    }
+
+    .quick-link-card:active {
+        transform: scale(0.98);
+    }
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+    .quick-link-card,
+    .quick-link-card:hover,
+    .site-header .nav-link,
+    .site-header .dropdown-toggle::after,
+    .site-footer a,
+    .btn-primary {
+        transition: none;
+    }
+
+    .quick-link-card:hover {
+        transform: none;
+    }
+
+    .btn-primary:hover {
+        transform: none;
+    }
+}

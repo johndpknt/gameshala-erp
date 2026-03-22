@@ -1,0 +1,59 @@
+/**
+ * Auth pages – login, etc. (centered card, no main nav)
+ */
+
+.auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background-color: var(--gs-body-bg, #f1f5f9);
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--gs-card-bg, #fff);
+    border: 1px solid var(--gs-border, #e2e8f0);
+    border-radius: var(--gs-radius, 8px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    padding: 2rem;
+}
+
+.auth-logo {
+    display: block;
+    height: 40px;
+    width: auto;
+    margin: 0 auto 1rem;
+    object-fit: contain;
+}
+
+.auth-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: var(--gs-text, #1e293b);
+}
+
+.auth-card .form-control:focus {
+    border-color: var(--gs-primary, #2563eb);
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.2);
+}
+
+.auth-card .btn-primary {
+    padding: 0.6rem 1rem;
+    font-weight: 500;
+}
+
+.auth-footer {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.875rem;
+    color: var(--gs-text-muted, #64748b);
+}
+
+.auth-footer a {
+    color: var(--gs-primary, #2563eb);
+}
