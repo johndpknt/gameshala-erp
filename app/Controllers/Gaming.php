@@ -37,10 +37,25 @@ class Gaming extends BaseController
     }
 
     /**
+     * Consol, gaming package, and price-rule management are limited to ADMIN (matches nav).
+     */
+    protected function requireAdminGaming(): ?RedirectResponse
+    {
+        if (session()->get('user_role') !== 'ADMIN') {
+            return redirect()->to('gaming/sessions')->with('error', 'That page is only available to administrators.');
+        }
+
+        return null;
+    }
+
+    /**
      * Categories page: gaming categories and gaming modes (add, edit, deactivate).
      */
-    public function categories(): string
+    public function categories(): string|RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         helper('form');
         $categories = $this->categoryModel->orderBy('name', 'asc')->findAll();
         $modes      = $this->modeModel->orderBy('name', 'asc')->findAll();
@@ -56,6 +71,9 @@ class Gaming extends BaseController
 
     public function addCategory(): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         if (! $this->validate(['name' => 'required|max_length[100]'])) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
@@ -67,6 +85,9 @@ class Gaming extends BaseController
 
     public function updateCategory(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $cat = $this->categoryModel->find($id);
         if (! $cat) {
             return redirect()->back()->with('error', 'Category not found.');
@@ -82,6 +103,9 @@ class Gaming extends BaseController
 
     public function setStatusCategory(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $cat = $this->categoryModel->find($id);
         if (! $cat) {
             return redirect()->back()->with('error', 'Category not found.');
@@ -96,6 +120,9 @@ class Gaming extends BaseController
 
     public function addMode(): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         if (! $this->validate(['name' => 'required|max_length[100]'])) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
@@ -107,6 +134,9 @@ class Gaming extends BaseController
 
     public function updateMode(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $mode = $this->modeModel->find($id);
         if (! $mode) {
             return redirect()->back()->with('error', 'Mode not found.');
@@ -122,6 +152,9 @@ class Gaming extends BaseController
 
     public function setStatusMode(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $mode = $this->modeModel->find($id);
         if (! $mode) {
             return redirect()->back()->with('error', 'Mode not found.');
@@ -137,8 +170,11 @@ class Gaming extends BaseController
     /**
      * Price rules page: list, add, edit, activate/deactivate.
      */
-    public function priceRules(): string
+    public function priceRules(): string|RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         helper('form');
         $categories = $this->categoryModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
         $modes      = $this->modeModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
@@ -164,10 +200,13 @@ class Gaming extends BaseController
 
     public function addPriceRule(): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $rules = [
             'gaming_category_id' => 'required|integer',
             'gaming_mode_id'    => 'required|integer',
-            'price_type'        => 'required|in_list[PER_MINUTE,PER_30_MIN,PER_HOUR,FIXED]',
+            'price_type'        => 'required|in_list[MIN_15,MIN_25,MIN_45,MIN_60]',
             'price'             => 'required|decimal',
         ];
         if (! $this->validate($rules)) {
@@ -190,6 +229,9 @@ class Gaming extends BaseController
 
     public function updatePriceRule(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $rule = $this->priceRuleModel->find($id);
         if (! $rule) {
             return redirect()->back()->with('error', 'Price rule not found.');
@@ -197,7 +239,7 @@ class Gaming extends BaseController
         $rules = [
             'gaming_category_id' => 'required|integer',
             'gaming_mode_id'     => 'required|integer',
-            'price_type'         => 'required|in_list[PER_MINUTE,PER_30_MIN,PER_HOUR,FIXED]',
+            'price_type'         => 'required|in_list[MIN_15,MIN_25,MIN_45,MIN_60]',
             'price'              => 'required|decimal',
         ];
         if (! $this->validate($rules)) {
@@ -215,6 +257,9 @@ class Gaming extends BaseController
 
     public function setStatusPriceRule(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $rule = $this->priceRuleModel->find($id);
         if (! $rule) {
             return redirect()->back()->with('error', 'Price rule not found.');
@@ -470,12 +515,16 @@ class Gaming extends BaseController
         $end   = strtotime($endTime);
         $minutes = max(0, ($end - $start) / 60);
         $price = (float) $rule['price'];
-        $priceType = $rule['price_type'] ?? 'FIXED';
+        $priceType = $rule['price_type'] ?? 'MIN_45';
         $gamingAmount = match ($priceType) {
+            'MIN_15' => round($price * ceil($minutes / 15), 2),
+            'MIN_25' => round($price * ceil($minutes / 25), 2),
+            'MIN_45' => round($price * ceil($minutes / 45), 2),
+            'MIN_60' => round($price * ceil($minutes / 60), 2),
             'PER_MINUTE' => round($price * $minutes, 2),
             'PER_30_MIN' => round($price * ceil($minutes / 30), 2),
             'PER_HOUR'   => round($price * ($minutes / 60), 2),
-            default     => round($price, 2),
+            default      => round($price, 2),
         };
 
         $foodRows = $this->visitFoodModel->where('gaming_visit_id', $id)->findAll();

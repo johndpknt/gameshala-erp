@@ -5,17 +5,17 @@ $modes      = $modes ?? [];
 $rules      = $rules ?? [];
 
 $priceTypeLabels = [
-    'PER_MINUTE' => 'Per minute',
-    'PER_30_MIN' => 'Per 30 min',
-    'PER_HOUR'   => 'Per hour',
-    'FIXED'      => 'Fixed',
+    'MIN_15' => '15 min',
+    'MIN_25' => '25 min',
+    'MIN_45' => '45 min',
+    'MIN_60' => '60 min',
 ];
 ?>
 <div class="container py-4 px-3 px-sm-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
         <div>
             <h1 class="h4 fw-semibold mb-1"><i class="bi bi-currency-rupee me-2"></i>Price Rules</h1>
-            <p class="text-secondary small mb-0">Manage gaming price rules by category and mode.</p>
+            <p class="text-secondary small mb-0">Manage gaming price rules by consol and gaming package.</p>
         </div>
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#priceRuleModal" id="btnAddPriceRule"><i class="bi bi-plus-lg me-2"></i>Add price rule</button>
     </div>
@@ -25,8 +25,8 @@ $priceTypeLabels = [
             <thead class="table-light">
                 <tr>
                     <th>Category</th>
-                    <th>Mode</th>
-                    <th>Price type</th>
+                    <th>Gaming package</th>
+                    <th>Time duration</th>
                     <th>Price (₹)</th>
                     <th>Status</th>
                     <th class="text-end" style="width: 120px;">Actions</th>
@@ -35,7 +35,7 @@ $priceTypeLabels = [
             <tbody>
                 <?php if (empty($rules)): ?>
                     <tr>
-                        <td colspan="6" class="text-center text-secondary py-4">No price rules yet. Add categories and modes first, then add a price rule.</td>
+                        <td colspan="6" class="text-center text-secondary py-4">No price rules yet. Add consols and gaming packages first, then add a price rule.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($rules as $r): ?>
@@ -111,18 +111,18 @@ $priceTypeLabels = [
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label for="priceRuleMode" class="form-label">Mode <span class="text-danger">*</span></label>
+                        <label for="priceRuleMode" class="form-label">Gaming package <span class="text-danger">*</span></label>
                         <select class="form-select" id="priceRuleMode" name="gaming_mode_id" required>
-                            <option value="">Select mode</option>
+                            <option value="">Select gaming package</option>
                             <?php foreach ($modes as $m): ?>
                                 <option value="<?= (int) $m['id'] ?>"><?= esc($m['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label for="priceRuleType" class="form-label">Price type <span class="text-danger">*</span></label>
+                        <label for="priceRuleType" class="form-label">Time duration <span class="text-danger">*</span></label>
                         <select class="form-select" id="priceRuleType" name="price_type" required>
-                            <option value="">Select type</option>
+                            <option value="">Select time duration</option>
                             <?php foreach ($priceTypeLabels as $value => $label): ?>
                                 <option value="<?= esc($value) ?>"><?= esc($label) ?></option>
                             <?php endforeach; ?>

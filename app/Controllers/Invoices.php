@@ -144,20 +144,38 @@ class Invoices extends BaseController
         }
 
         $coupon = null;
-        if (! empty($order['coupon_id'])) {
+        if ($order && ! empty($order['coupon_id'])) {
             $coupon = $this->couponModel->find($order['coupon_id']);
         }
+
+        $productDiscount = 0.0;
+        $couponDiscount  = $isGaming ? 0.0 : (float) ($invoice['discount_amount'] ?? 0);
+        if (! $isGaming && ! empty($items)) {
+            foreach ($items as $row) {
+                $list = (float) ($row['listing_price_snapshot'] ?? $row['unit_price'] ?? 0);
+                $unit = (float) ($row['unit_price'] ?? 0);
+                $qty  = (int) ($row['qty'] ?? 0);
+                if ($list > $unit && $qty > 0) {
+                    $productDiscount += ($list - $unit) * $qty;
+                }
+            }
+            $productDiscount = round($productDiscount, 2);
+        }
+        $totalDiscount = round($productDiscount + $couponDiscount, 2);
 
         $company = config('Company');
 
         $data = [
-            'invoice'   => $invoice,
-            'order'     => $order,
-            'customer'  => $customer,
-            'items'     => $items,
-            'coupon'    => $coupon,
-            'company'   => $company,
-            'isGaming'  => $isGaming,
+            'invoice'          => $invoice,
+            'order'            => $order,
+            'customer'         => $customer,
+            'items'            => $items,
+            'coupon'           => $coupon,
+            'company'          => $company,
+            'isGaming'         => $isGaming,
+            'productDiscount'  => $productDiscount,
+            'couponDiscount'   => $couponDiscount,
+            'totalDiscount'    => $totalDiscount,
         ];
 
         return view('sales/invoices/print', $data);

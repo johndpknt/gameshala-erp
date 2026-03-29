@@ -1,5 +1,5 @@
 <?php
-helper('form');
+helper(['form', 'gaming']);
 $ongoing             = $ongoing ?? [];
 $finished            = $finished ?? [];
 $finishedTotal       = (int) ($finishedTotal ?? 0);
@@ -186,9 +186,9 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                     <div class="mb-3">
                         <label for="startPriceRule" class="form-label">Game (price rule) <span class="text-danger">*</span></label>
                         <select class="form-select" id="startPriceRule" name="gaming_price_rule_id" required>
-                            <option value="">Select category / mode</option>
+                            <option value="">Select consol / gaming package</option>
                             <?php foreach ($priceRules as $r): ?>
-                                <option value="<?= (int) $r['id'] ?>"><?= esc($r['category_name']) ?> / <?= esc($r['mode_name']) ?> (<?= esc($r['price_type']) ?> ₹<?= number_format((float) $r['price'], 2) ?>)</option>
+                                <option value="<?= (int) $r['id'] ?>"><?= esc($r['category_name']) ?> / <?= esc($r['mode_name']) ?> (<?= esc(gaming_time_duration_label((string) ($r['price_type'] ?? ''))) ?> ₹<?= number_format((float) $r['price'], 2) ?>)</option>
                             <?php endforeach; ?>
                         </select>
                     </div>

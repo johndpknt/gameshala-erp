@@ -17,6 +17,9 @@ composer.phar
 !writable/session/index.html
 !writable/uploads/index.html
 
+# Debugbar
+/writable/debugbar/
+
 # IDE and OS
 .idea/
 .vscode/

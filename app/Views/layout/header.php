@@ -10,6 +10,14 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarMain">
                 <ul class="navbar-nav ms-auto">
+                    <?php
+                    $navRole = (string) (session()->get('user_role') ?? '');
+                    $isAdmin = $navRole === 'ADMIN';
+                    $isStaff = $navRole === 'STAFF';
+                    $showFullNav = $isAdmin;
+                    $showSalesGaming = $isAdmin || $isStaff;
+                    ?>
+                    <?php if ($showFullNav): ?>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="<?= base_url('catalog') ?>" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-collection nav-icon me-1"></i>Catalog</a>
                         <ul class="dropdown-menu dropdown-menu-dark">
@@ -26,6 +34,8 @@
                             <li><a class="dropdown-item" href="<?= base_url('inventory/procurement-rules') ?>"><i class="bi bi-clipboard-check me-2"></i>Procurement Rules</a></li>
                         </ul>
                     </li>
+                    <?php endif; ?>
+                    <?php if ($showSalesGaming): ?>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="<?= base_url('sales') ?>" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-credit-card nav-icon me-1"></i>Sales</a>
                         <ul class="dropdown-menu dropdown-menu-dark">
@@ -35,14 +45,18 @@
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="<?= base_url('gaming/categories') ?>" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-controller nav-icon me-1"></i>Gaming</a>
+                        <a class="nav-link dropdown-toggle" href="<?= base_url('gaming/sessions') ?>" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-controller nav-icon me-1"></i>Gaming</a>
                         <ul class="dropdown-menu dropdown-menu-dark">
+                            <?php if ($showFullNav): ?>
                             <li><a class="dropdown-item" href="<?= base_url('gaming/categories') ?>"><i class="bi bi-tags me-2"></i>Categories</a></li>
                             <li><a class="dropdown-item" href="<?= base_url('gaming/price-rules') ?>"><i class="bi bi-currency-rupee me-2"></i>Price Rules</a></li>
+                            <?php endif; ?>
                             <li><a class="dropdown-item" href="<?= base_url('gaming/food-beverages') ?>"><i class="bi bi-cup-straw me-2"></i>Food & Beverages</a></li>
                             <li><a class="dropdown-item" href="<?= base_url('gaming/sessions') ?>"><i class="bi bi-play-circle me-2"></i>Sessions</a></li>
                         </ul>
                     </li>
+                    <?php endif; ?>
+                    <?php if ($showFullNav): ?>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="<?= base_url('admin') ?>" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-gear nav-icon me-1"></i>Admin</a>
                         <ul class="dropdown-menu dropdown-menu-dark">
@@ -50,6 +64,7 @@
                             <li><a class="dropdown-item" href="<?= base_url('admin/activity-log') ?>"><i class="bi bi-clipboard-data me-2"></i>Activity Log</a></li>
                         </ul>
                     </li>
+                    <?php endif; ?>
                     <?php if (session()->has('user_id')): ?>
                     <li class="nav-item">
                         <a class="nav-link" href="<?= base_url('logout') ?>"><i class="bi bi-box-arrow-right nav-icon me-1"></i>Logout</a>

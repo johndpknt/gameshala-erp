@@ -132,20 +132,35 @@
         </tbody>
     </table>
 
+    <?php
+    $productDiscount = isset($productDiscount) ? (float) $productDiscount : 0.0;
+    $couponDiscount  = isset($couponDiscount) ? (float) $couponDiscount : (float) ($invoice['discount_amount'] ?? 0);
+    $totalDiscount   = isset($totalDiscount) ? (float) $totalDiscount : $productDiscount + $couponDiscount;
+    ?>
     <div class="totals">
         <table>
             <tr><td>Subtotal</td><td style="text-align:right;"><?= number_format((float) $invoice['subtotal'], 2) ?></td></tr>
-            <?php if ((float) ($invoice['discount_amount'] ?? 0) > 0): ?>
+            <?php if ($productDiscount > 0): ?>
                 <tr>
-                    <td>
-                        Coupon applied<?php if (! empty($coupon)): ?> <span style="color:#555;">(<?= esc($coupon['code']) ?><?php
-                            $dtype = $coupon['discount_type'] ?? '';
-                            $dval  = (float) ($coupon['discount_value'] ?? 0);
-                            if ($dtype === 'PERCENTAGE' || $dtype === 'percent'): ?> — <?= $dval ?>%<?php
-                            elseif ($dtype === 'FLAT' || $dtype === 'fixed'): ?> — <?= number_format($dval, 2) ?><?php endif; ?>)</span>
-                        <?php endif; ?>
-                    </td>
-                    <td style="text-align:right;">-<?= number_format((float) $invoice['discount_amount'], 2) ?></td>
+                    <td>Product discount</td>
+                    <td style="text-align:right;">-<?= number_format($productDiscount, 2) ?></td>
+                </tr>
+            <?php endif; ?>
+            <tr>
+                <td>
+                    Discount (coupon)<?php if (! empty($coupon) && $couponDiscount > 0): ?> <span style="color:#555;">(<?= esc($coupon['code']) ?><?php
+                        $dtype = $coupon['discount_type'] ?? '';
+                        $dval  = (float) ($coupon['discount_value'] ?? 0);
+                        if ($dtype === 'PERCENTAGE' || $dtype === 'percent'): ?> — <?= $dval ?>%<?php
+                        elseif ($dtype === 'FLAT' || $dtype === 'fixed'): ?> — <?= number_format($dval, 2) ?><?php endif; ?>)</span>
+                    <?php endif; ?>
+                </td>
+                <td style="text-align:right;"><?= $couponDiscount > 0 ? number_format($couponDiscount, 2) : number_format(0, 2) ?></td>
+            </tr>
+            <?php if ($totalDiscount > 0): ?>
+                <tr>
+                    <td>Total discount</td>
+                    <td style="text-align:right;">-<?= number_format($totalDiscount, 2) ?></td>
                 </tr>
             <?php endif; ?>
             <?php if ((float) ($invoice['tax_amount'] ?? 0) > 0): ?>
