@@ -7,9 +7,50 @@ $finishedPage        = max(1, (int) ($finishedPage ?? 1));
 $finishedPerPage     = (int) ($finishedPerPage ?? 10);
 $finishedTotalPages  = max(1, (int) ($finishedTotalPages ?? 1));
 $foodByVisit         = $foodByVisit ?? [];
-$foodItems           = $foodItems ?? [];
-$priceRules          = $priceRules ?? [];
-$sessionsBaseUrl     = base_url('gaming/sessions');
+$foodItems   = $foodItems ?? [];
+$catalogFoodItems = $catalogFoodItems ?? [];
+$visitFoodHasProductId = (bool) ($visitFoodHasProductId ?? false);
+$priceRules  = $priceRules ?? [];
+$sessionsBaseUrl           = base_url('gaming/sessions');
+
+$mergedFoodForJs = [];
+foreach ($foodItems as $f) {
+    $row = [
+        'line_type'  => 'fb',
+        'id'         => (int) $f['id'],
+        'name'       => $f['name'] ?? '',
+        'price'      => (float) ($f['price'] ?? 0),
+        'unit_label' => $f['unit_label'] ?? '',
+    ];
+    if (! empty($f['sku'])) {
+        $row['sku'] = (string) $f['sku'];
+    }
+    $mergedFoodForJs[] = $row;
+}
+if ($visitFoodHasProductId) {
+    foreach ($catalogFoodItems as $c) {
+        $mergedFoodForJs[] = [
+            'line_type'  => 'product',
+            'id'         => (int) $c['id'],
+            'name'       => $c['name'] ?? '',
+            'sku'        => $c['sku'] ?? '',
+            'price'      => (float) ($c['unit_price'] ?? 0),
+            'unit_label' => $c['unit'] ?? '',
+        ];
+    }
+}
+
+if (! function_exists('gaming_visit_duration_hms')) {
+    function gaming_visit_duration_hms(?string $start, ?string $end): string
+    {
+        if ($start === null || $end === null || $start === '' || $end === '') {
+            return '—';
+        }
+        $s = max(0, (int) strtotime($end) - (int) strtotime($start));
+
+        return sprintf('%02d:%02d:%02d', intdiv($s, 3600), intdiv($s % 3600, 60), $s % 60);
+    }
+}
 ?>
 <div class="container py-4 px-3 px-sm-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
@@ -84,6 +125,7 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                         <th>Game</th>
                         <th>Started</th>
                         <th>Ended</th>
+                        <th>Total time</th>
                         <th>Gaming</th>
                         <th>Food</th>
                         <th>Total</th>
@@ -99,6 +141,7 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                             <td><?= esc($v['category_name'] ?? '—') ?> / <?= esc($v['mode_name'] ?? '—') ?></td>
                             <td><?= $v['start_time'] ? date('d M H:i', strtotime($v['start_time'])) : '—' ?></td>
                             <td><?= $v['end_time'] ? date('d M H:i', strtotime($v['end_time'])) : '—' ?></td>
+                            <td class="text-nowrap font-monospace small"><?= esc(gaming_visit_duration_hms($v['start_time'] ?? null, $v['end_time'] ?? null)) ?></td>
                             <td>₹<?= number_format((float) ($v['gaming_amount'] ?? 0), 2) ?></td>
                             <td>₹<?= number_format((float) ($v['food_amount'] ?? 0), 2) ?></td>
                             <td><strong>₹<?= number_format((float) ($v['total_amount'] ?? 0), 2) ?></strong></td>
@@ -199,7 +242,7 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                         </div>
                         <div class="col-6">
                             <label for="startTime" class="form-label">Start time <span class="text-danger">*</span></label>
-                            <input type="datetime-local" class="form-control" id="startTime" name="start_time" value="<?= date('Y-m-d\TH:i') ?>" required>
+                            <input type="datetime-local" class="form-control" id="startTime" name="start_time" required>
                         </div>
                     </div>
                 </div>
@@ -220,13 +263,15 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                 <h2 class="modal-title fs-6" id="addFoodModalLabel"><i class="bi bi-cup-straw me-2"></i>Add food / beverage</h2>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <?= form_open(base_url('gaming/sessions/add-food')) ?>
+            <?= form_open(base_url('gaming/sessions/add-food'), ['id' => 'addFoodForm']) ?>
                 <?= csrf_field() ?>
                 <input type="hidden" name="gaming_visit_id" id="addFoodVisitId" value="">
+                <input type="hidden" name="line_type" id="addFoodLineType" value="">
                 <input type="hidden" name="food_beverage_item_id" id="addFoodItemId" value="">
+                <input type="hidden" name="product_id" id="addFoodProductId" value="">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="addFoodSearch" class="form-label">Item <span class="text-danger">*</span></label>
+                        <label for="addFoodSearch" class="form-label">Food &amp; Beverage <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="addFoodSearch" placeholder="Search by name..." autocomplete="off">
                         <div id="addFoodResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
                         <div id="addFoodSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
@@ -276,9 +321,12 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
     updateSessionTimers();
     setInterval(updateSessionTimers, 1000);
 
-    var foodItemsData = <?= json_encode(array_map(function ($f) {
-        return ['id' => (int) $f['id'], 'name' => $f['name'] ?? '', 'price' => (float) ($f['price'] ?? 0), 'unit_label' => $f['unit_label'] ?? ''];
-    }, $foodItems)) ?>;
+    function localDatetimeLocalValue() {
+        var d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().slice(0, 16);
+    }
+    var foodItemsData = <?= json_encode($mergedFoodForJs) ?>;
     var startSessionModal = document.getElementById('startSessionModal');
     var startSessionForm = document.getElementById('startSessionForm');
     var customerIdEl = document.getElementById('customerId');
@@ -322,11 +370,14 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
         if (toggleText) toggleText.textContent = '+ New customer? Add name & phone';
         if (startSessionForm) startSessionForm.reset();
         document.getElementById('noOfPlayers').value = '1';
-        document.getElementById('startTime').value = '<?= date('Y-m-d\TH:i') ?>';
+        var st = document.getElementById('startTime');
+        if (st) st.value = localDatetimeLocalValue();
     }
 
     if (startSessionModal) {
-        startSessionModal.addEventListener('show.bs.modal', function () { resetStartSessionForm(); });
+        startSessionModal.addEventListener('show.bs.modal', function () {
+            resetStartSessionForm();
+        });
     }
 
     var toggleBtn = document.getElementById('toggleNewCustomer');
@@ -403,6 +454,10 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
             var errEl = document.getElementById('addFoodItemError');
             if (searchEl) searchEl.value = '';
             if (idEl) idEl.value = '';
+            var lineTypeEl = document.getElementById('addFoodLineType');
+            var prodIdEl = document.getElementById('addFoodProductId');
+            if (lineTypeEl) lineTypeEl.value = '';
+            if (prodIdEl) prodIdEl.value = '';
             if (resultsEl) { resultsEl.innerHTML = ''; resultsEl.style.display = 'none'; }
             if (selectedEl) selectedEl.style.display = 'none';
             if (errEl) { errEl.style.display = 'none'; }
@@ -413,10 +468,12 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
 
     var addFoodSearch = document.getElementById('addFoodSearch');
     var addFoodItemId = document.getElementById('addFoodItemId');
+    var addFoodProductId = document.getElementById('addFoodProductId');
+    var addFoodLineType = document.getElementById('addFoodLineType');
     var addFoodResults = document.getElementById('addFoodResults');
     var addFoodSelected = document.getElementById('addFoodSelected');
     var addFoodItemError = document.getElementById('addFoodItemError');
-    var addFoodForm = document.getElementById('addFoodModal') ? document.getElementById('addFoodModal').querySelector('form') : null;
+    var addFoodForm = document.getElementById('addFoodForm');
 
     if (addFoodSearch && addFoodResults) {
         function renderFoodResults(matches) {
@@ -424,18 +481,27 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
             if (matches.length === 0) {
                 var empty = document.createElement('div');
                 empty.className = 'list-group-item text-muted small';
-                empty.textContent = 'No items match.';
+                empty.textContent = 'No Food & Beverage matches.';
                 addFoodResults.appendChild(empty);
             } else {
                 matches.forEach(function (f) {
-                    var label = f.name + ' — ₹' + (f.price.toFixed(2)) + (f.unit_label ? ' / ' + f.unit_label : '');
+                    var skuPart = f.sku ? (' [' + f.sku + ']') : '';
+                    var src = (f.line_type === 'product') ? '[Catalog] ' : '';
+                    var label = src + f.name + skuPart + ' — ₹' + (Number(f.price).toFixed(2)) + (f.unit_label ? ' / ' + f.unit_label : '');
                     var a = document.createElement('a');
                     a.href = '#';
                     a.className = 'list-group-item list-group-item-action';
                     a.textContent = label;
                     a.addEventListener('click', function (e) {
                         e.preventDefault();
-                        addFoodItemId.value = f.id;
+                        addFoodLineType.value = f.line_type || 'fb';
+                        if (f.line_type === 'product') {
+                            addFoodProductId.value = f.id;
+                            addFoodItemId.value = '';
+                        } else {
+                            addFoodItemId.value = f.id;
+                            addFoodProductId.value = '';
+                        }
                         addFoodSelected.textContent = 'Selected: ' + label;
                         addFoodSelected.style.display = 'block';
                         addFoodSearch.value = f.name;
@@ -449,19 +515,27 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
             addFoodResults.style.display = 'block';
         }
         function refreshFoodResults() {
-            if (addFoodItemId.value) return;
-            addFoodItemId.value = '';
+            if (addFoodItemId.value || addFoodProductId.value) return;
             addFoodSelected.style.display = 'none';
             addFoodItemError.style.display = 'none';
             var q = (addFoodSearch.value || '').trim().toLowerCase();
             var matches = q.length < 1
                 ? foodItemsData.slice()
-                : foodItemsData.filter(function (f) { return (f.name || '').toLowerCase().indexOf(q) !== -1; });
+                : foodItemsData.filter(function (f) {
+                    var blob = ((f.name || '') + ' ' + (f.unit_label || '') + ' ' + (f.sku || '')).toLowerCase();
+                    return blob.indexOf(q) !== -1;
+                });
             renderFoodResults(matches);
         }
-        addFoodSearch.addEventListener('input', refreshFoodResults);
+        addFoodSearch.addEventListener('input', function () {
+            addFoodItemId.value = '';
+            addFoodProductId.value = '';
+            addFoodLineType.value = '';
+            addFoodSelected.style.display = 'none';
+            refreshFoodResults();
+        });
         addFoodSearch.addEventListener('focus', function () {
-            if (addFoodItemId.value) return;
+            if (addFoodItemId.value || addFoodProductId.value) return;
             refreshFoodResults();
         });
         addFoodSearch.addEventListener('blur', function () {
@@ -471,11 +545,21 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
 
     if (addFoodForm) {
         addFoodForm.addEventListener('submit', function (e) {
-            if (!addFoodItemId.value || addFoodItemId.value === '') {
-                e.preventDefault();
-                addFoodItemError.textContent = 'Please search and select an item.';
-                addFoodItemError.style.display = 'block';
-                return false;
+            var lt = (addFoodLineType && addFoodLineType.value) ? addFoodLineType.value : '';
+            if (lt === 'product') {
+                if (!addFoodProductId.value || addFoodProductId.value === '') {
+                    e.preventDefault();
+                    addFoodItemError.textContent = 'Please search and select an item.';
+                    addFoodItemError.style.display = 'block';
+                    return false;
+                }
+            } else {
+                if (!addFoodItemId.value || addFoodItemId.value === '') {
+                    e.preventDefault();
+                    addFoodItemError.textContent = 'Please search and select an item.';
+                    addFoodItemError.style.display = 'block';
+                    return false;
+                }
             }
         });
     }

@@ -1,9 +1,8 @@
 <header class="site-header">
     <nav class="navbar navbar-expand-lg navbar-dark" aria-label="Main navigation">
         <div class="container-fluid px-3 px-sm-4">
-            <a class="navbar-brand d-flex align-items-center" href="<?= base_url('/') ?>" aria-label="Gameshala ERP Home">
-                <img src="<?= asset_url('assets/images/logo.png') ?>" alt="Gameshala ERP" class="logo-img me-2" height="36" width="auto" loading="lazy">
-                <span class="d-none d-sm-inline">Gameshala ERP</span>
+            <a class="navbar-brand d-flex align-items-center" href="<?= base_url('/') ?>" aria-label="Home">
+                <img src="<?= asset_url('assets/images/logo.png') ?>" alt="" class="logo-img" height="36" width="auto" loading="lazy">
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" aria-controls="navbarMain" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>

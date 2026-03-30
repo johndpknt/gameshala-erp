@@ -415,10 +415,15 @@ class Orders extends BaseController
         if (! $this->validate($rules)) {
             return $this->response->setJSON(['success' => false, 'errors' => $this->validator->getErrors()]);
         }
+        $phone = (string) $this->request->getPost('phone');
+        if ($this->customerModel->findByPhoneDigits($phone)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'A customer with this phone number already exists.']);
+        }
+
         $data = [
             'customer_type' => $this->request->getPost('customer_type'),
             'name'          => $this->request->getPost('name'),
-            'phone'         => $this->request->getPost('phone'),
+            'phone'         => $phone,
             'email'         => $this->request->getPost('email') ?: null,
             'address_line1' => $this->request->getPost('address_line1') ?: null,
             'address_line2' => $this->request->getPost('address_line2') ?: null,

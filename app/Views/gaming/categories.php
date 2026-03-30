@@ -4,14 +4,14 @@ $categories = $categories ?? [];
 $modes      = $modes ?? [];
 ?>
 <div class="container py-4 px-3 px-sm-4">
-    <h1 class="h4 fw-semibold mb-2"><i class="bi bi-tags me-2"></i>Categories</h1>
+    <h1 class="h4 fw-semibold mb-2"><i class="bi bi-tags me-2"></i>Gaming Consols, Packages &amp; Price</h1>
     <p class="text-secondary mb-4">Manage gaming consols and gaming packages.</p>
 
     <!-- Gaming Consol -->
     <section class="mb-5">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
             <h2 class="h5 fw-semibold mb-0">Gaming Consol</h2>
-            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#categoryModal" id="btnAddCategory"><i class="bi bi-plus-lg me-1"></i>Add category</button>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#categoryModal" id="btnAddCategory"><i class="bi bi-plus-lg me-1"></i>Add Gaming Consol</button>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle table-sm">

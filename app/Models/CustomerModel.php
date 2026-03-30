@@ -32,4 +32,25 @@ class CustomerModel extends Model
     protected $createdField   = 'created_at';
     protected $updatedField   = 'updated_at';
     protected $dateFormat    = 'datetime';
+
+    /**
+     * Match by last 10 digits (handles +91, spaces, dashes). Returns first row if found.
+     */
+    public function findByPhoneDigits(string $phone): ?array
+    {
+        $digits = preg_replace('/\D+/', '', $phone);
+        if ($digits === '') {
+            return null;
+        }
+        $last10 = strlen($digits) >= 10 ? substr($digits, -10) : $digits;
+        $prefix = $this->db->DBPrefix;
+        $table  = $this->table;
+
+        $row = $this->db->query(
+            "SELECT * FROM `{$prefix}{$table}` WHERE RIGHT(REGEXP_REPLACE(COALESCE(`phone`, ''), '[^0-9]', ''), 10) = ? LIMIT 1",
+            [$last10]
+        )->getRowArray();
+
+        return $row ?: null;
+    }
 }

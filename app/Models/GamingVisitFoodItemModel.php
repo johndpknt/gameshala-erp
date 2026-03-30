@@ -12,5 +12,5 @@ class GamingVisitFoodItemModel extends Model
     protected $returnType       = 'array';
     protected $useSoftDeletes   = false;
     protected $protectFields    = true;
-    protected $allowedFields    = ['gaming_visit_id', 'food_beverage_item_id', 'quantity', 'line_total'];
+    protected $allowedFields    = ['gaming_visit_id', 'food_beverage_item_id', 'product_id', 'stock_batch_id', 'quantity', 'line_total'];
 }

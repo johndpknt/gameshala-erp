@@ -102,12 +102,25 @@ class Invoices extends BaseController
         if ($isGaming) {
             $visit = $this->gamingVisitModel->find($invoice['gaming_visit_id']);
             $prefix = $this->gamingVisitFoodModel->db->DBPrefix;
-            $foodRows = $this->gamingVisitFoodModel->builder()
-                ->select('gaming_visit_food_items.*, fbi.name AS item_name')
-                ->join($prefix . 'food_beverage_items fbi', 'fbi.id = gaming_visit_food_items.food_beverage_item_id', 'left')
-                ->where('gaming_visit_food_items.gaming_visit_id', $invoice['gaming_visit_id'])
+            $vfTable = $prefix . 'gaming_visit_food_items';
+            $hasProd = $this->gamingVisitFoodModel->db->fieldExists('product_id', $vfTable);
+            $sel     = 'gaming_visit_food_items.*, fbi.name AS fb_name';
+            if ($hasProd) {
+                $sel .= ', p.name AS product_name, p.sku AS product_sku';
+            }
+            $foodQ = $this->gamingVisitFoodModel->builder()
+                ->select($sel)
+                ->join($prefix . 'food_beverage_items fbi', 'fbi.id = gaming_visit_food_items.food_beverage_item_id', 'left');
+            if ($hasProd) {
+                $foodQ->join($prefix . 'products p', 'p.id = gaming_visit_food_items.product_id', 'left');
+            }
+            $foodRows = $foodQ->where('gaming_visit_food_items.gaming_visit_id', $invoice['gaming_visit_id'])
                 ->get()
                 ->getResultArray();
+            foreach ($foodRows as &$fr) {
+                $fr['item_name'] = $fr['fb_name'] ?? $fr['product_name'] ?? 'Food item';
+            }
+            unset($fr);
             $catName = '—';
             $modeName = '—';
             if ($visit && ! empty($visit['gaming_price_rule_id'])) {

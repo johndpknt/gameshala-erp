@@ -1,4 +1,5 @@
 <?php
+$staffHideRevenue = $staffHideRevenue ?? false;
 $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $revenueLastMonth) / $revenueLastMonth) * 100 : (($revenueThisMonth ?? 0) > 0 ? 100 : 0);
 ?>
 <div class="container py-4 px-3 px-sm-4">
@@ -20,6 +21,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
     <section class="mb-4">
         <h2 class="h6 text-uppercase text-muted fw-semibold mb-3"><i class="bi bi-bar-chart me-1"></i>Overview</h2>
         <div class="row g-3">
+            <?php if (! $staffHideRevenue): ?>
             <div class="col-6 col-md-4 col-lg-2">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -28,6 +30,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
             <div class="col-6 col-md-4 col-lg-2">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -36,6 +39,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php if (! $staffHideRevenue): ?>
             <div class="col-6 col-md-4 col-lg-2">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -44,6 +48,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
             <div class="col-6 col-md-4 col-lg-2">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -68,6 +73,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php if (! $staffHideRevenue): ?>
             <div class="col-6 col-md-4 col-lg-2">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -92,6 +98,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
             <div class="col-6 col-md-4 col-lg-2">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -118,6 +125,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php if (! $staffHideRevenue): ?>
             <div class="col-12 col-md-6 col-lg-3">
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">
@@ -129,6 +137,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
             <div class="col-12 col-md-6 col-lg-4">
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">

@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Models\BatchProcurementRuleModel;
 use App\Models\CustomerModel;
 use App\Models\FoodBeverageItemModel;
 use App\Models\GamingCategoryModel;
@@ -10,6 +11,9 @@ use App\Models\GamingPriceRuleModel;
 use App\Models\GamingVisitFoodItemModel;
 use App\Models\GamingVisitModel;
 use App\Models\InvoiceModel;
+use App\Models\ProductModel;
+use App\Models\ProcurementRuleModel;
+use App\Models\StockBatchModel;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
 
@@ -23,6 +27,10 @@ class Gaming extends BaseController
     protected GamingVisitFoodItemModel $visitFoodModel;
     protected CustomerModel $customerModel;
     protected InvoiceModel $invoiceModel;
+    protected ProductModel $productModel;
+    protected StockBatchModel $stockBatchModel;
+    protected BatchProcurementRuleModel $batchRuleModel;
+    protected ProcurementRuleModel $procurementRuleModel;
 
     public function __construct()
     {
@@ -34,6 +42,113 @@ class Gaming extends BaseController
         $this->visitFoodModel       = model(GamingVisitFoodItemModel::class);
         $this->customerModel        = model(CustomerModel::class);
         $this->invoiceModel         = model(InvoiceModel::class);
+        $this->productModel         = model(ProductModel::class);
+        $this->stockBatchModel      = model(StockBatchModel::class);
+        $this->batchRuleModel       = model(BatchProcurementRuleModel::class);
+        $this->procurementRuleModel = model(ProcurementRuleModel::class);
+    }
+
+    protected function gamingVisitFoodHasProductIdColumn(): bool
+    {
+        $t = $this->visitFoodModel->db->DBPrefix . $this->visitFoodModel->table;
+
+        return $this->visitFoodModel->db->fieldExists('product_id', $t);
+    }
+
+    /**
+     * Same list as gaming/food-beverages: all active items.
+     */
+    protected function allFoodBeverageItemsForSession(): array
+    {
+        return $this->foodBeverageItemModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
+    }
+
+    protected function productSkuAllowedForSessionFood(string $sku): bool
+    {
+        $u = strtoupper($sku);
+
+        return str_starts_with($u, 'BEVE-') || str_starts_with($u, 'FOOD');
+    }
+
+    protected function computeSellingPrice(float $unitCost, array $rule): float
+    {
+        $profitType  = $rule['profit_type'] ?? 'FLAT';
+        $profitValue = (float) ($rule['profit_value'] ?? 0);
+        $profitAmount = $profitType === 'PERCENTAGE'
+            ? $unitCost * ($profitValue / 100)
+            : $profitValue;
+
+        return round(max(0, $unitCost + $profitAmount), 2);
+    }
+
+    /**
+     * @return array{batch_id: int, unit_price: float}|null
+     */
+    protected function resolveCatalogProductUnitPrice(int $productId): ?array
+    {
+        $batch = $this->stockBatchModel
+            ->where('product_id', $productId)
+            ->where('remaining_qty >', 0)
+            ->orderBy('received_at', 'asc')
+            ->first();
+        if (! $batch) {
+            return null;
+        }
+        $ruleRow = $this->batchRuleModel
+            ->where('batch_id', $batch['id'])
+            ->where('is_active', 1)
+            ->orderBy('id', 'desc')
+            ->first();
+        if (! $ruleRow) {
+            return null;
+        }
+        $rule = $this->procurementRuleModel->find($ruleRow['procurement_rule_id']);
+        if (! $rule) {
+            return null;
+        }
+        $unitCost  = (float) $batch['unit_cost'];
+        $unitPrice = $this->computeSellingPrice($unitCost, $rule);
+
+        return ['batch_id' => (int) $batch['id'], 'unit_price' => $unitPrice];
+    }
+
+    /**
+     * Catalog products (active) with SKU BEVE-* or FOOD* and available price/stock.
+     *
+     * @return list<array{id: int, name: string, sku: string, unit: string, unit_price: float, batch_id: int}>
+     */
+    protected function catalogProductsForSessionFood(): array
+    {
+        $rows = $this->productModel->builder()
+            ->where('is_active', 1)
+            ->groupStart()
+                ->like('sku', 'BEVE-', 'after')
+                ->orLike('sku', 'FOOD', 'after')
+            ->groupEnd()
+            ->orderBy('name', 'asc')
+            ->get()
+            ->getResultArray();
+        $out = [];
+        foreach ($rows as $p) {
+            $sku = (string) ($p['sku'] ?? '');
+            if (! $this->productSkuAllowedForSessionFood($sku)) {
+                continue;
+            }
+            $price = $this->resolveCatalogProductUnitPrice((int) $p['id']);
+            if ($price === null) {
+                continue;
+            }
+            $out[] = [
+                'id'         => (int) $p['id'],
+                'name'       => $p['name'] ?? '',
+                'sku'        => $sku,
+                'unit'       => $p['unit'] ?? '',
+                'unit_price' => $price['unit_price'],
+                'batch_id'   => $price['batch_id'],
+            ];
+        }
+
+        return $out;
     }
 
     /**
@@ -377,7 +492,8 @@ class Gaming extends BaseController
             ->get()
             ->getResultArray();
 
-        $foodItems   = $this->foodBeverageItemModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
+        $foodItems        = $this->allFoodBeverageItemsForSession();
+        $catalogFoodItems = $this->catalogProductsForSessionFood();
         $priceRules  = $this->priceRuleModel->where('is_active', 1)->orderBy('id', 'asc')->findAll();
         $rulesWithNames = [];
         foreach ($priceRules as $r) {
@@ -390,12 +506,20 @@ class Gaming extends BaseController
         $visitIds    = array_merge(array_column($ongoing, 'id'), array_column($finished, 'id'));
         $foodByVisit = [];
         if (! empty($visitIds)) {
-            $rows = $this->visitFoodModel->builder()
-                ->select('gaming_visit_food_items.*, fbi.name AS item_name, fbi.unit_label')
-                ->join($prefix . 'food_beverage_items fbi', 'fbi.id = gaming_visit_food_items.food_beverage_item_id', 'left')
-                ->whereIn('gaming_visit_food_items.gaming_visit_id', $visitIds)
-                ->get()
-                ->getResultArray();
+            $vf = $this->visitFoodModel->builder();
+            $vf->select('gaming_visit_food_items.*, fbi.name AS fb_name, fbi.unit_label AS fb_unit_label');
+            $vf->join($prefix . 'food_beverage_items fbi', 'fbi.id = gaming_visit_food_items.food_beverage_item_id', 'left');
+            if ($this->gamingVisitFoodHasProductIdColumn()) {
+                $vf->select('gaming_visit_food_items.*, fbi.name AS fb_name, fbi.unit_label AS fb_unit_label, p.name AS product_name, p.unit AS product_unit');
+                $vf->join($prefix . 'products p', 'p.id = gaming_visit_food_items.product_id', 'left');
+            }
+            $vf->whereIn('gaming_visit_food_items.gaming_visit_id', $visitIds);
+            $rows = $vf->get()->getResultArray();
+            foreach ($rows as &$r) {
+                $r['item_name']   = $r['fb_name'] ?? $r['product_name'] ?? '';
+                $r['unit_label']  = $r['fb_unit_label'] ?? $r['product_unit'] ?? '';
+            }
+            unset($r);
             foreach ($rows as $row) {
                 $vid = $row['gaming_visit_id'];
                 if (! isset($foodByVisit[$vid])) {
@@ -409,15 +533,17 @@ class Gaming extends BaseController
         return view('layout/main', [
             'pageTitle' => 'Sessions - Gaming',
             'content'   => view('gaming/sessions', [
-                'ongoing'              => $ongoing,
-                'finished'             => $finished,
-                'finishedTotal'        => $finishedTotal,
-                'finishedPage'         => $finishedPage,
-                'finishedPerPage'      => $finishedPerPage,
-                'finishedTotalPages'   => $finishedTotalPages,
-                'foodByVisit'          => $foodByVisit,
-                'foodItems'            => $foodItems,
-                'priceRules'           => $rulesWithNames,
+                'ongoing'            => $ongoing,
+                'finished'           => $finished,
+                'finishedTotal'      => $finishedTotal,
+                'finishedPage'       => $finishedPage,
+                'finishedPerPage'    => $finishedPerPage,
+                'finishedTotalPages' => $finishedTotalPages,
+                'foodByVisit'        => $foodByVisit,
+                'foodItems'          => $foodItems,
+                'catalogFoodItems'   => $catalogFoodItems,
+                'visitFoodHasProductId' => $this->gamingVisitFoodHasProductIdColumn(),
+                'priceRules'         => $rulesWithNames,
             ]),
         ]);
     }
@@ -435,6 +561,13 @@ class Gaming extends BaseController
         $newName  = trim((string) $this->request->getPost('new_customer_name'));
         $newPhone = trim((string) $this->request->getPost('new_customer_phone'));
         if ($newName !== '' && $newPhone !== '') {
+            $dup = $this->customerModel->findByPhoneDigits($newPhone);
+            if ($dup !== null) {
+                return redirect()->back()->withInput()->with(
+                    'error',
+                    'This phone number is already registered for ' . ($dup['name'] ?? 'another customer') . '. Search and select that customer instead.'
+                );
+            }
             $customerId = $this->customerModel->insert([
                 'customer_type' => 'WALK_IN',
                 'name'          => $newName,
@@ -476,9 +609,11 @@ class Gaming extends BaseController
 
     public function addFood(): RedirectResponse
     {
-        $visitId = (int) $this->request->getPost('gaming_visit_id');
-        $itemId  = (int) $this->request->getPost('food_beverage_item_id');
-        $qty     = (int) $this->request->getPost('quantity');
+        $visitId   = (int) $this->request->getPost('gaming_visit_id');
+        $lineType  = trim((string) $this->request->getPost('line_type'));
+        $itemId    = (int) $this->request->getPost('food_beverage_item_id');
+        $productId = (int) $this->request->getPost('product_id');
+        $qty       = (int) $this->request->getPost('quantity');
         if ($qty < 1) {
             return redirect()->back()->with('error', 'Quantity must be at least 1.');
         }
@@ -486,18 +621,58 @@ class Gaming extends BaseController
         if (! $visit || ($visit['status'] ?? '') !== 'ONGOING') {
             return redirect()->back()->with('error', 'Session not found or not ongoing.');
         }
-        $item = $this->foodBeverageItemModel->find($itemId);
-        if (! $item || ! (int) ($item['is_active'] ?? 1)) {
-            return redirect()->back()->with('error', 'Item not found.');
+
+        if ($lineType === 'product') {
+            if (! $this->gamingVisitFoodHasProductIdColumn()) {
+                return redirect()->back()->with('error', 'Catalog items are not available until the database is updated. Run migrations.');
+            }
+            if ($productId < 1) {
+                return redirect()->back()->with('error', 'Please select a food or beverage item.');
+            }
+            $product = $this->productModel->find($productId);
+            if (! $product || ! (int) ($product['is_active'] ?? 1)) {
+                return redirect()->back()->with('error', 'Product not found.');
+            }
+            if (! $this->productSkuAllowedForSessionFood((string) ($product['sku'] ?? ''))) {
+                return redirect()->back()->with('error', 'This product is not allowed for gaming sessions.');
+            }
+            $priceInfo = $this->resolveCatalogProductUnitPrice($productId);
+            if ($priceInfo === null) {
+                return redirect()->back()->with('error', 'No stock or pricing rule for this product.');
+            }
+            $lineTotal = round($priceInfo['unit_price'] * $qty, 2);
+            $this->visitFoodModel->insert([
+                'gaming_visit_id'       => $visitId,
+                'food_beverage_item_id' => null,
+                'product_id'              => $productId,
+                'stock_batch_id'          => $priceInfo['batch_id'],
+                'quantity'                => $qty,
+                'line_total'              => $lineTotal,
+            ]);
+        } else {
+            if ($itemId < 1) {
+                return redirect()->back()->with('error', 'Please select a food or beverage item.');
+            }
+            $item = $this->foodBeverageItemModel->find($itemId);
+            if (! $item || ! (int) ($item['is_active'] ?? 1)) {
+                return redirect()->back()->with('error', 'Item not found.');
+            }
+            $lineTotal = round((float) $item['price'] * $qty, 2);
+            $row = [
+                'gaming_visit_id'       => $visitId,
+                'food_beverage_item_id' => $itemId,
+                'quantity'              => $qty,
+                'line_total'            => $lineTotal,
+            ];
+            if ($this->gamingVisitFoodHasProductIdColumn()) {
+                $row['product_id']     = null;
+                $row['stock_batch_id'] = null;
+            }
+            $this->visitFoodModel->insert($row);
         }
-        $lineTotal = round((float) $item['price'] * $qty, 2);
-        $this->visitFoodModel->insert([
-            'gaming_visit_id'       => $visitId,
-            'food_beverage_item_id' => $itemId,
-            'quantity'             => $qty,
-            'line_total'           => $lineTotal,
-        ]);
+
         $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added food/beverage to session #' . $visitId);
+
         return redirect()->back()->with('message', 'Item added to session.');
     }
 

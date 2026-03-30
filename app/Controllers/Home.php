@@ -124,8 +124,11 @@ class Home extends BaseController
             ->get()
             ->getResultArray();
 
+        $staffHideRevenue = (string) (session()->get('user_role') ?? '') === 'STAFF';
+
         $data = [
             'pageTitle'            => 'Dashboard - Gameshala ERP',
+            'staffHideRevenue'     => $staffHideRevenue,
             'totalRevenue'         => $totalRevenue,
             'revenueToday'         => $revenueToday,
             'revenueThisMonth'     => $revenueThisMonth,
@@ -242,8 +245,11 @@ class Home extends BaseController
             ->get()
             ->getResultArray();
 
+        $staffHideRevenue = (string) (session()->get('user_role') ?? '') === 'STAFF';
+
         $data = [
             'pageTitle'          => 'ERP Dashboard - Gameshala ERP',
+            'staffHideRevenue'   => $staffHideRevenue,
             'totalRevenue'       => $totalRevenue,
             'revenueToday'       => $revenueToday,
             'revenueThisMonth'   => $revenueThisMonth,

@@ -1,4 +1,5 @@
 <?php
+$staffHideRevenue      = $staffHideRevenue ?? false;
 $ongoingSessionsCount  = $ongoingSessionsCount ?? 0;
 $sessionsEndedToday    = $sessionsEndedToday ?? 0;
 $unpaidSessionsCount   = $unpaidSessionsCount ?? 0;
@@ -28,6 +29,7 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
     <section class="mb-4">
         <h2 class="h6 text-uppercase text-muted fw-semibold mb-3"><i class="bi bi-graph-up me-1"></i>Key metrics</h2>
         <div class="row g-3">
+            <?php if (! $staffHideRevenue): ?>
             <div class="col-6 col-lg-3">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -47,6 +49,7 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
             <div class="col-6 col-lg-3">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -144,6 +147,7 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
         </div>
 
         <div class="col-12 col-lg-4">
+            <?php if (! $staffHideRevenue): ?>
             <!-- Sales summary -->
             <section class="mb-4">
                 <h2 class="h6 text-uppercase text-muted fw-semibold mb-3"><i class="bi bi-credit-card me-1"></i>Sales summary</h2>
@@ -174,6 +178,7 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
                     </div>
                 </div>
             </section>
+            <?php endif; ?>
 
             <!-- Recent orders -->
             <section class="mb-4">
