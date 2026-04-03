@@ -27,17 +27,15 @@ foreach ($foodItems as $f) {
     }
     $mergedFoodForJs[] = $row;
 }
-if ($visitFoodHasProductId) {
-    foreach ($catalogFoodItems as $c) {
-        $mergedFoodForJs[] = [
-            'line_type'  => 'product',
-            'id'         => (int) $c['id'],
-            'name'       => $c['name'] ?? '',
-            'sku'        => $c['sku'] ?? '',
-            'price'      => (float) ($c['unit_price'] ?? 0),
-            'unit_label' => $c['unit'] ?? '',
-        ];
-    }
+foreach ($catalogFoodItems as $c) {
+    $mergedFoodForJs[] = [
+        'line_type'  => 'product',
+        'id'         => (int) $c['id'],
+        'name'       => $c['name'] ?? '',
+        'sku'        => $c['sku'] ?? '',
+        'price'      => (float) ($c['unit_price'] ?? 0),
+        'unit_label' => $c['unit'] ?? '',
+    ];
 }
 
 if (! function_exists('gaming_visit_duration_hms')) {
@@ -271,7 +269,7 @@ if (! function_exists('gaming_visit_duration_hms')) {
                 <input type="hidden" name="product_id" id="addFoodProductId" value="">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="addFoodSearch" class="form-label">Food &amp; Beverage <span class="text-danger">*</span></label>
+                        <label for="addFoodSearch" class="form-label">Food &amp; Beverage (Own) <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="addFoodSearch" placeholder="Search by name..." autocomplete="off">
                         <div id="addFoodResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
                         <div id="addFoodSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
@@ -280,6 +278,16 @@ if (! function_exists('gaming_visit_duration_hms')) {
                     <div class="mb-3">
                         <label for="addFoodQty" class="form-label">Quantity <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" id="addFoodQty" name="quantity" value="1" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="addFoodCatalogSearch" class="form-label">Food &amp; Beverage</label>
+                        <input type="text" class="form-control" id="addFoodCatalogSearch" placeholder="Search by SKU (BEVE-/FOOD) or name..." autocomplete="off">
+                        <div id="addFoodCatalogResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
+                        <div id="addFoodCatalogSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="addFoodCatelogQty" class="form-label">Quantity <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="addFoodCatelogQty" name="quantity" value="1" min="1" required>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -327,6 +335,60 @@ if (! function_exists('gaming_visit_duration_hms')) {
         return d.toISOString().slice(0, 16);
     }
     var foodItemsData = <?= json_encode($mergedFoodForJs) ?>;
+
+    var catalogLoadedOnce = false;
+    function loadCatalogProductsFromApiOnce() {
+        if (catalogLoadedOnce) return;
+        var inputEl = document.getElementById('addFoodCatalogSearch');
+        if (!inputEl) return;
+        catalogLoadedOnce = true;
+
+        var url = baseUrl + 'api/products?per_page=all';
+        fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (payload) {
+                var data = payload && payload.data ? payload.data : [];
+
+                var existingIds = {};
+                (foodItemsData || []).forEach(function (f) {
+                    if (f && f.line_type === 'product') existingIds[(f.id || 0)] = true;
+                });
+
+                var mapped = [];
+                data.forEach(function (p) {
+                    var sku = (p && p.sku) ? String(p.sku) : '';
+                    var up = sku.toUpperCase();
+                    if (!(up.startsWith('BEVE-') || up.startsWith('FOOD'))) return;
+
+                    if (p.is_active !== undefined && p.is_active !== null) {
+                        if (String(p.is_active) !== '1' && String(p.is_active) !== 'true') return;
+                    }
+
+                    var id = parseInt(p.id || 0, 10);
+                    if (!id || existingIds[id]) return;
+
+                    var selling = p.selling_price !== undefined && p.selling_price !== null ? Number(p.selling_price) : null;
+                    var list = p.list_price !== undefined && p.list_price !== null ? Number(p.list_price) : null;
+                    var price = selling !== null ? selling : (list !== null ? list : 0);
+
+                    mapped.push({
+                        line_type: 'product',
+                        id: id,
+                        name: p.name || '',
+                        sku: sku,
+                        price: price,
+                        unit_label: p.unit || ''
+                    });
+                });
+
+                foodItemsData = (foodItemsData || []).concat(mapped);
+
+                inputEl.dispatchEvent(new Event('input'));
+            })
+            .catch(function () {
+                catalogLoadedOnce = false;
+            });
+    }
     var startSessionModal = document.getElementById('startSessionModal');
     var startSessionForm = document.getElementById('startSessionForm');
     var customerIdEl = document.getElementById('customerId');
@@ -448,11 +510,15 @@ if (! function_exists('gaming_visit_duration_hms')) {
             document.getElementById('addFoodVisitId').value = visitId;
             document.getElementById('addFoodModalLabel').textContent = 'Add food / beverage — Session #' + visitId;
             var searchEl = document.getElementById('addFoodSearch');
+            var catalogSearchEl = document.getElementById('addFoodCatalogSearch');
             var idEl = document.getElementById('addFoodItemId');
             var resultsEl = document.getElementById('addFoodResults');
             var selectedEl = document.getElementById('addFoodSelected');
+            var catalogResultsEl = document.getElementById('addFoodCatalogResults');
+            var catalogSelectedEl = document.getElementById('addFoodCatalogSelected');
             var errEl = document.getElementById('addFoodItemError');
             if (searchEl) searchEl.value = '';
+            if (catalogSearchEl) catalogSearchEl.value = '';
             if (idEl) idEl.value = '';
             var lineTypeEl = document.getElementById('addFoodLineType');
             var prodIdEl = document.getElementById('addFoodProductId');
@@ -460,9 +526,21 @@ if (! function_exists('gaming_visit_duration_hms')) {
             if (prodIdEl) prodIdEl.value = '';
             if (resultsEl) { resultsEl.innerHTML = ''; resultsEl.style.display = 'none'; }
             if (selectedEl) selectedEl.style.display = 'none';
+            if (catalogResultsEl) { catalogResultsEl.innerHTML = ''; catalogResultsEl.style.display = 'none'; }
+            if (catalogSelectedEl) catalogSelectedEl.style.display = 'none';
             if (errEl) { errEl.style.display = 'none'; }
-            document.getElementById('addFoodQty').value = '1';
+            var ownQtyEl = document.getElementById('addFoodQty');
+            var catQtyEl = document.getElementById('addFoodCatelogQty');
+            if (ownQtyEl) {
+                ownQtyEl.value = '1';
+                ownQtyEl.disabled = false;
+            }
+            if (catQtyEl) {
+                catQtyEl.value = '1';
+                catQtyEl.disabled = true; // enabled only for catalog selections
+            }
             new bootstrap.Modal(document.getElementById('addFoodModal')).show();
+            loadCatalogProductsFromApiOnce();
         });
     });
 
@@ -472,6 +550,9 @@ if (! function_exists('gaming_visit_duration_hms')) {
     var addFoodLineType = document.getElementById('addFoodLineType');
     var addFoodResults = document.getElementById('addFoodResults');
     var addFoodSelected = document.getElementById('addFoodSelected');
+    var addFoodCatalogSearch = document.getElementById('addFoodCatalogSearch');
+    var addFoodCatalogResults = document.getElementById('addFoodCatalogResults');
+    var addFoodCatalogSelected = document.getElementById('addFoodCatalogSelected');
     var addFoodItemError = document.getElementById('addFoodItemError');
     var addFoodForm = document.getElementById('addFoodForm');
 
@@ -494,16 +575,17 @@ if (! function_exists('gaming_visit_duration_hms')) {
                     a.textContent = label;
                     a.addEventListener('click', function (e) {
                         e.preventDefault();
-                        addFoodLineType.value = f.line_type || 'fb';
-                        if (f.line_type === 'product') {
-                            addFoodProductId.value = f.id;
-                            addFoodItemId.value = '';
-                        } else {
-                            addFoodItemId.value = f.id;
-                            addFoodProductId.value = '';
-                        }
+                        addFoodLineType.value = 'fb';
+                        addFoodItemId.value = f.id;
+                        addFoodProductId.value = '';
+                        var ownQtyEl = document.getElementById('addFoodQty');
+                        var catQtyEl = document.getElementById('addFoodCatelogQty');
+                        if (ownQtyEl) ownQtyEl.disabled = false;
+                        if (catQtyEl) catQtyEl.disabled = true;
                         addFoodSelected.textContent = 'Selected: ' + label;
                         addFoodSelected.style.display = 'block';
+                        if (addFoodCatalogSelected) addFoodCatalogSelected.style.display = 'none';
+                        addFoodCatalogSearch && (addFoodCatalogSearch.value = '');
                         addFoodSearch.value = f.name;
                         addFoodResults.style.display = 'none';
                         addFoodResults.innerHTML = '';
@@ -515,13 +597,14 @@ if (! function_exists('gaming_visit_duration_hms')) {
             addFoodResults.style.display = 'block';
         }
         function refreshFoodResults() {
-            if (addFoodItemId.value || addFoodProductId.value) return;
+            if (addFoodItemId.value) return;
             addFoodSelected.style.display = 'none';
             addFoodItemError.style.display = 'none';
             var q = (addFoodSearch.value || '').trim().toLowerCase();
+            var fbItems = foodItemsData.filter(function (f) { return f.line_type === 'fb'; });
             var matches = q.length < 1
-                ? foodItemsData.slice()
-                : foodItemsData.filter(function (f) {
+                ? fbItems
+                : fbItems.filter(function (f) {
                     var blob = ((f.name || '') + ' ' + (f.unit_label || '') + ' ' + (f.sku || '')).toLowerCase();
                     return blob.indexOf(q) !== -1;
                 });
@@ -529,13 +612,11 @@ if (! function_exists('gaming_visit_duration_hms')) {
         }
         addFoodSearch.addEventListener('input', function () {
             addFoodItemId.value = '';
-            addFoodProductId.value = '';
-            addFoodLineType.value = '';
             addFoodSelected.style.display = 'none';
             refreshFoodResults();
         });
         addFoodSearch.addEventListener('focus', function () {
-            if (addFoodItemId.value || addFoodProductId.value) return;
+            if (addFoodItemId.value) return;
             refreshFoodResults();
         });
         addFoodSearch.addEventListener('blur', function () {
@@ -543,23 +624,86 @@ if (! function_exists('gaming_visit_duration_hms')) {
         });
     }
 
+    if (addFoodCatalogSearch && addFoodCatalogResults) {
+        function renderCatalogResults(matches) {
+            addFoodCatalogResults.innerHTML = '';
+            if (matches.length === 0) {
+                var empty = document.createElement('div');
+                empty.className = 'list-group-item text-muted small';
+                empty.textContent = 'No Food & Beverage (catalog) matches.';
+                addFoodCatalogResults.appendChild(empty);
+            } else {
+                matches.forEach(function (f) {
+                    var skuPart = f.sku ? (' [' + f.sku + ']') : '';
+                    var label = '[Catalog] ' + f.name + skuPart + ' — ₹' + (Number(f.price).toFixed(2)) + (f.unit_label ? ' / ' + f.unit_label : '');
+                    var a = document.createElement('a');
+                    a.href = '#';
+                    a.className = 'list-group-item list-group-item-action';
+                    a.textContent = label;
+                    a.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        addFoodLineType.value = 'product';
+                        addFoodProductId.value = f.id;
+                        addFoodItemId.value = '';
+                        var ownQtyEl = document.getElementById('addFoodQty');
+                        var catQtyEl = document.getElementById('addFoodCatelogQty');
+                        if (ownQtyEl) ownQtyEl.disabled = true;
+                        if (catQtyEl) catQtyEl.disabled = false;
+                        addFoodCatalogSelected.textContent = 'Selected: ' + label;
+                        addFoodCatalogSelected.style.display = 'block';
+                        if (addFoodSelected) addFoodSelected.style.display = 'none';
+                        addFoodSearch && (addFoodSearch.value = '');
+                        addFoodCatalogSearch.value = f.name;
+                        addFoodCatalogResults.style.display = 'none';
+                        addFoodCatalogResults.innerHTML = '';
+                        addFoodItemError.style.display = 'none';
+                    });
+                    addFoodCatalogResults.appendChild(a);
+                });
+            }
+            addFoodCatalogResults.style.display = 'block';
+        }
+
+        function refreshCatalogResults() {
+            if (addFoodProductId.value) return;
+            if (addFoodCatalogSelected) addFoodCatalogSelected.style.display = 'none';
+            addFoodItemError.style.display = 'none';
+            var q = (addFoodCatalogSearch.value || '').trim().toLowerCase();
+            var productItems = foodItemsData.filter(function (f) { return f.line_type === 'product'; });
+            var matches = q.length < 1
+                ? productItems
+                : productItems.filter(function (f) {
+                    var blob = ((f.name || '') + ' ' + (f.unit_label || '') + ' ' + (f.sku || '')).toLowerCase();
+                    return blob.indexOf(q) !== -1;
+                });
+            renderCatalogResults(matches);
+        }
+
+        addFoodCatalogSearch.addEventListener('input', function () {
+            addFoodProductId.value = '';
+            if (addFoodCatalogSelected) addFoodCatalogSelected.style.display = 'none';
+            refreshCatalogResults();
+        });
+
+        addFoodCatalogSearch.addEventListener('focus', function () {
+            if (addFoodProductId.value) return;
+            refreshCatalogResults();
+        });
+
+        addFoodCatalogSearch.addEventListener('blur', function () {
+            setTimeout(function () { addFoodCatalogResults.style.display = 'none'; }, 200);
+        });
+    }
+
     if (addFoodForm) {
         addFoodForm.addEventListener('submit', function (e) {
-            var lt = (addFoodLineType && addFoodLineType.value) ? addFoodLineType.value : '';
-            if (lt === 'product') {
-                if (!addFoodProductId.value || addFoodProductId.value === '') {
-                    e.preventDefault();
-                    addFoodItemError.textContent = 'Please search and select an item.';
-                    addFoodItemError.style.display = 'block';
-                    return false;
-                }
-            } else {
-                if (!addFoodItemId.value || addFoodItemId.value === '') {
-                    e.preventDefault();
-                    addFoodItemError.textContent = 'Please search and select an item.';
-                    addFoodItemError.style.display = 'block';
-                    return false;
-                }
+            var hasOwn = addFoodItemId && addFoodItemId.value;
+            var hasCatalog = addFoodProductId && addFoodProductId.value;
+            if (!hasOwn && !hasCatalog) {
+                e.preventDefault();
+                addFoodItemError.textContent = 'Please search and select a Food & Beverage item.';
+                addFoodItemError.style.display = 'block';
+                return false;
             }
         });
     }

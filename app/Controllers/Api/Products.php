@@ -38,7 +38,9 @@ class Products extends BaseController
         $sort    = $this->request->getGet('sort');
         $order   = strtolower((string) $this->request->getGet('order')) === 'desc' ? 'desc' : 'asc';
         $page    = max(1, (int) $this->request->getGet('page'));
-        $perPage = min(100, max(1, (int) $this->request->getGet('per_page') ?: 20));
+        $perPageParam = (string) ($this->request->getGet('per_page') ?? '');
+        $perPageAll   = in_array(strtolower($perPageParam), ['all', '-1'], true);
+        $perPage      = $perPageAll ? 0 : min(100, max(1, (int) $this->request->getGet('per_page') ?: 20));
 
         $allowedSort = ['id', 'sku', 'name', 'slug', 'unit', 'is_public', 'is_active', 'created_at', 'updated_at'];
         if ($sort === null || ! in_array($sort, $allowedSort, true)) {
@@ -78,8 +80,15 @@ class Products extends BaseController
 
         $total = $builder->countAllResults(false);
         $builder->orderBy($sort, $order);
-        $offset = ($page - 1) * $perPage;
-        $rows   = $builder->get($perPage, $offset)->getResultArray();
+        if ($perPageAll) {
+            // Return *all* rows for dropdown usage.
+            $page   = 1;
+            $perPage = max(1, (int) $total);
+            $rows   = $builder->get()->getResultArray();
+        } else {
+            $offset = ($page - 1) * $perPage;
+            $rows   = $builder->get($perPage, $offset)->getResultArray();
+        }
 
         $productIds = array_column($rows, 'id');
         $stockPriceMap = $this->getStockAndPriceForProducts($productIds);

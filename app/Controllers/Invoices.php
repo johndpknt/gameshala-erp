@@ -165,6 +165,14 @@ class Invoices extends BaseController
         $couponDiscount  = $isGaming ? 0.0 : (float) ($invoice['discount_amount'] ?? 0);
         if (! $isGaming && ! empty($items)) {
             foreach ($items as $row) {
+                $lineDiscount = (float) ($row['discount_amount'] ?? 0);
+                if ($lineDiscount > 0) {
+                    // discount_amount is stored as the total discount for that line (matches invoice print column).
+                    $productDiscount += $lineDiscount;
+                    continue;
+                }
+
+                // Fallback for older rows without discount_amount stored.
                 $list = (float) ($row['listing_price_snapshot'] ?? $row['unit_price'] ?? 0);
                 $unit = (float) ($row['unit_price'] ?? 0);
                 $qty  = (int) ($row['qty'] ?? 0);
