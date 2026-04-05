@@ -78,10 +78,18 @@ class Customers extends BaseController
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
 
+        $phone = trim((string) $this->request->getPost('phone'));
+        $dup   = $this->customerModel->findOtherByPhoneComparable($phone, null);
+        if ($dup !== null) {
+            return redirect()->back()->withInput()->with('errors', [
+                'phone' => 'This phone number is already registered for ' . ($dup['name'] ?? 'another customer') . '.',
+            ]);
+        }
+
         $data = [
             'customer_type' => $this->request->getPost('customer_type'),
             'name'          => $this->request->getPost('name'),
-            'phone'         => $this->request->getPost('phone'),
+            'phone'         => $phone,
             'email'         => $this->request->getPost('email') ?: null,
             'address_line1' => $this->request->getPost('address_line1') ?: null,
             'address_line2' => $this->request->getPost('address_line2') ?: null,
@@ -126,10 +134,18 @@ class Customers extends BaseController
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
 
+        $phone = trim((string) $this->request->getPost('phone'));
+        $dup   = $this->customerModel->findOtherByPhoneComparable($phone, $id);
+        if ($dup !== null) {
+            return redirect()->back()->withInput()->with('errors', [
+                'phone' => 'This phone number is already registered for ' . ($dup['name'] ?? 'another customer') . '.',
+            ]);
+        }
+
         $data = [
             'customer_type' => $this->request->getPost('customer_type'),
             'name'          => $this->request->getPost('name'),
-            'phone'         => $this->request->getPost('phone'),
+            'phone'         => $phone,
             'email'         => $this->request->getPost('email') ?: null,
             'address_line1' => $this->request->getPost('address_line1') ?: null,
             'address_line2' => $this->request->getPost('address_line2') ?: null,

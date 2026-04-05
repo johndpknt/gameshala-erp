@@ -313,7 +313,7 @@ class Orders extends BaseController
         if ($phone === null || $phone === '') {
             return $this->response->setStatusCode(400)->setJSON(['found' => false]);
         }
-        $customer = $this->customerModel->where('phone', $phone)->where('is_active', 1)->first();
+        $customer = $this->customerModel->findActiveByPhoneComparable($phone);
         if (! $customer) {
             return $this->response->setJSON(['found' => false]);
         }
@@ -440,10 +440,17 @@ class Orders extends BaseController
         if (! $this->validate($rules)) {
             return $this->response->setJSON(['success' => false, 'errors' => $this->validator->getErrors()]);
         }
+        $phone = trim((string) $this->request->getPost('phone'));
+        if ($this->customerModel->findOtherByPhoneComparable($phone, null) !== null) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'A customer with this phone number already exists. Look them up by phone instead.',
+            ]);
+        }
         $data = [
             'customer_type' => $this->request->getPost('customer_type'),
             'name'          => $this->request->getPost('name'),
-            'phone'         => $this->request->getPost('phone'),
+            'phone'         => $phone,
             'email'         => $this->request->getPost('email') ?: null,
             'address_line1' => $this->request->getPost('address_line1') ?: null,
             'address_line2' => $this->request->getPost('address_line2') ?: null,

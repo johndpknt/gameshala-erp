@@ -390,6 +390,13 @@ class Gaming extends BaseController
         $newName  = trim((string) $this->request->getPost('new_customer_name'));
         $newPhone = trim((string) $this->request->getPost('new_customer_phone'));
         if ($newName !== '' && $newPhone !== '') {
+            $newPhone = trim($newPhone);
+            if ($this->customerModel->findOtherByPhoneComparable($newPhone, null) !== null) {
+                return redirect()->back()->withInput()->with(
+                    'error',
+                    'This phone number is already registered. Search and select that customer, or use a different phone.'
+                );
+            }
             $customerId = $this->customerModel->insert([
                 'customer_type' => 'WALK_IN',
                 'name'          => $newName,
