@@ -30,6 +30,19 @@ class ProductModel extends Model
     protected $dateFormat    = 'datetime';
 
     /**
+     * Food & beverage catalog SKUs use batch-level selling_price; procurement rules are optional.
+     */
+    public static function skuIsFoodOrBeverage(?string $sku): bool
+    {
+        if ($sku === null || $sku === '') {
+            return false;
+        }
+        $u = strtoupper($sku);
+
+        return str_starts_with($u, 'BEVE-') || str_starts_with($u, 'FOOD-');
+    }
+
+    /**
      * Convert pipe-separated image_url from DB to array of URLs.
      */
     public static function imageUrlToArray(?string $imageUrl): array

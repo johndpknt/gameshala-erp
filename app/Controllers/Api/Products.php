@@ -223,13 +223,18 @@ class Products extends BaseController
         $sb     = $prefix . 'stock_batches';
 
         $batches = $this->stockBatchModel->db->table($sb)
-            ->select("{$sb}.id, {$sb}.product_id, {$sb}.remaining_qty, {$sb}.unit_cost, {$sb}.received_at")
+            ->select("{$sb}.id, {$sb}.product_id, {$sb}.remaining_qty, {$sb}.unit_cost, {$sb}.selling_price, {$sb}.received_at")
             ->whereIn('product_id', $productIds)
             ->where('remaining_qty >', 0)
             ->orderBy('product_id')
             ->orderBy('received_at', 'asc')
             ->get()
             ->getResultArray();
+
+        $skuById = [];
+        foreach ($this->productModel->whereIn('id', $productIds)->findAll() as $pr) {
+            $skuById[(int) $pr['id']] = (string) ($pr['sku'] ?? '');
+        }
 
         $productStock = [];
         $batchIds = [];
@@ -275,7 +280,17 @@ class Products extends BaseController
             $discountPercent = null;
             $ruleName = null;
             $first = $firstBatchByProduct[$pid] ?? null;
-            if ($first) {
+            $sku   = $skuById[$pid] ?? '';
+            if ($first && ProductModel::skuIsFoodOrBeverage($sku)) {
+                $rawSp = $first['selling_price'] ?? null;
+                if ($rawSp !== null && $rawSp !== '') {
+                    $fixed        = round((float) $rawSp, 2);
+                    $sellingPrice = $fixed;
+                    $listPrice    = $fixed;
+                    $ruleName     = 'Batch selling price';
+                }
+            }
+            if ($first && $sellingPrice === null) {
                 $rule = $rulesByBatch[(int) $first['id']] ?? null;
                 if ($rule) {
                     $unitCost = (float) $first['unit_cost'];

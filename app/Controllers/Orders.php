@@ -339,7 +339,7 @@ class Orders extends BaseController
 
     /**
      * API: Get selling price (and batch + rule details) for a product. GET ?product_id=
-     * Returns first batch with remaining_qty > 0 and active procurement rule (FIFO by received_at).
+     * FIFO batch with remaining_qty > 0. BEVE-/FOOD-* SKUs use batch selling_price when set; else procurement rule.
      */
     public function apiProductPrice(): ResponseInterface
     {
@@ -361,6 +361,31 @@ class Orders extends BaseController
             return $this->response->setJSON(['found' => false, 'message' => 'No stock available.']);
         }
 
+        $unitCost = (float) $batch['unit_cost'];
+        $sku      = (string) ($product['sku'] ?? '');
+
+        if (ProductModel::skuIsFoodOrBeverage($sku)) {
+            $rawSp = $batch['selling_price'] ?? null;
+            if ($rawSp !== null && $rawSp !== '') {
+                $unitPrice    = round((float) $rawSp, 2);
+                $listingPrice = $unitPrice;
+
+                return $this->response->setJSON([
+                    'found'         => true,
+                    'product_id'    => $productId,
+                    'product_name'  => $product['name'] ?? '',
+                    'batch_id'      => (int) $batch['id'],
+                    'batch_code'    => $batch['batch_code'] ?? '',
+                    'unit_cost'     => $unitCost,
+                    'unit_price'    => $unitPrice,
+                    'listing_price' => $listingPrice,
+                    'remaining_qty' => (int) $batch['remaining_qty'],
+                    'rule_name'     => 'Batch selling price',
+                    'rule_id'       => 0,
+                ]);
+            }
+        }
+
         $ruleRow = $this->batchRuleModel
             ->where('batch_id', $batch['id'])
             ->where('is_active', 1)
@@ -375,8 +400,7 @@ class Orders extends BaseController
             return $this->response->setJSON(['found' => false]);
         }
 
-        $unitCost    = (float) $batch['unit_cost'];
-        $unitPrice   = $this->computeSellingPrice($unitCost, $rule);
+        $unitPrice    = $this->computeSellingPrice($unitCost, $rule);
         $listingPrice = $this->computeListingPrice($unitPrice, $rule);
 
         return $this->response->setJSON([
