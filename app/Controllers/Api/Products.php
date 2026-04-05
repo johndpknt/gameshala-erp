@@ -31,6 +31,10 @@ class Products extends BaseController
     /**
      * GET api/products
      * Query params: q (search), sort, order, page, per_page, is_active, is_public, in_stock, min_price, max_price
+     *
+     * per_page: number (1–100), "all"/"-1" for every row, or SKU tokens (comma / whitespace / encoded & as %26).
+     * Unencoded "beve&food" in the URL becomes per_page=beve plus a separate param "food"; that case is detected
+     * so both BEVE- and FOOD- SKUs are included. Prefer per_page=beve,food or per_page=beve%26food when possible.
      */
     public function index(): ResponseInterface
     {
@@ -38,7 +42,9 @@ class Products extends BaseController
         $sort    = $this->request->getGet('sort');
         $order   = strtolower((string) $this->request->getGet('order')) === 'desc' ? 'desc' : 'asc';
         $page    = max(1, (int) $this->request->getGet('page'));
-        $perPage = min(100, max(1, (int) $this->request->getGet('per_page') ?: 20));
+        $perPageParam = (string) ($this->request->getGet('per_page') ?? '');
+        $perPageAll   = in_array(strtolower(trim($perPageParam)), ['all', '-1'], true);
+        $perPage      = $perPageAll ? 0 : min(100, max(1, (int) $this->request->getGet('per_page') ?: 20));
 
         $allowedSort = ['id', 'sku', 'name', 'slug', 'unit', 'is_public', 'is_active', 'created_at', 'updated_at'];
         if ($sort === null || ! in_array($sort, $allowedSort, true)) {
@@ -46,6 +52,22 @@ class Products extends BaseController
         }
 
         $builder = $this->productModel->builder();
+
+        if (! $perPageAll) {
+            $skuPrefixes = $this->skuPrefixesFromPerPageParam(trim($perPageParam));
+            $skuPrefixes = $this->mergeSkuPrefixesForBeveAndFoodQuery(trim($perPageParam), $skuPrefixes);
+            if ($skuPrefixes !== []) {
+                $builder->groupStart();
+                foreach ($skuPrefixes as $i => $prefix) {
+                    if ($i === 0) {
+                        $builder->like('sku', $prefix, 'after');
+                    } else {
+                        $builder->orLike('sku', $prefix, 'after');
+                    }
+                }
+                $builder->groupEnd();
+            }
+        }
 
         if ($q !== null && $q !== '') {
             $builder->groupStart()
@@ -78,8 +100,14 @@ class Products extends BaseController
 
         $total = $builder->countAllResults(false);
         $builder->orderBy($sort, $order);
-        $offset = ($page - 1) * $perPage;
-        $rows   = $builder->get($perPage, $offset)->getResultArray();
+        if ($perPageAll) {
+            $page    = 1;
+            $perPage = max(1, (int) $total);
+            $rows    = $builder->get()->getResultArray();
+        } else {
+            $offset = ($page - 1) * $perPage;
+            $rows   = $builder->get($perPage, $offset)->getResultArray();
+        }
 
         $productIds = array_column($rows, 'id');
         $stockPriceMap = $this->getStockAndPriceForProducts($productIds);
@@ -122,6 +150,64 @@ class Products extends BaseController
                 'total_pages'  => $totalPages,
             ],
         ]);
+    }
+
+    /**
+     * When per_page is not numeric and not "all"/"-1", treat it as SKU family tokens (comma, &, or whitespace).
+     * Maps beve → BEVE-, food → FOOD- for LIKE 'PREFIX%' on sku.
+     *
+     * @return list<string>
+     */
+    protected function skuPrefixesFromPerPageParam(string $perPageParam): array
+    {
+        if ($perPageParam === '' || ctype_digit($perPageParam)) {
+            return [];
+        }
+
+        $map = [
+            'beve' => 'BEVE-',
+            'food' => 'FOOD-',
+        ];
+
+        $tokens = preg_split('/[,;&\s]+/', $perPageParam, -1, PREG_SPLIT_NO_EMPTY);
+        if ($tokens === false) {
+            return [];
+        }
+
+        $prefixes = [];
+        foreach ($tokens as $token) {
+            $key = strtolower(trim($token));
+            if ($key !== '' && isset($map[$key])) {
+                $prefixes[] = $map[$key];
+            }
+        }
+
+        return array_values(array_unique($prefixes));
+    }
+
+    /**
+     * If the client sends an unencoded URL like ?per_page=beve&food, PHP only sees per_page=beve and a separate "food"
+     * query key. Treat per_page=beve + presence of food (any value, including empty) as both prefixes; same for food + beve.
+     *
+     * @param list<string> $prefixes
+     * @return list<string>
+     */
+    protected function mergeSkuPrefixesForBeveAndFoodQuery(string $trimmedPerPage, array $prefixes): array
+    {
+        $t = strtolower($trimmedPerPage);
+        $get = $this->request->getGet();
+        if (! is_array($get)) {
+            return $prefixes;
+        }
+
+        if ($t === 'beve' && array_key_exists('food', $get) && ! in_array('FOOD-', $prefixes, true)) {
+            $prefixes[] = 'FOOD-';
+        }
+        if ($t === 'food' && array_key_exists('beve', $get) && ! in_array('BEVE-', $prefixes, true)) {
+            $prefixes[] = 'BEVE-';
+        }
+
+        return array_values(array_unique($prefixes));
     }
 
     /**
