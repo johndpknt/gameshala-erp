@@ -135,6 +135,7 @@ class Orders extends BaseController
             }
             $lineTotal = round($unitPrice * $qty, 2);
             $subtotal += $lineTotal;
+            $lineProductDiscount = ($listingPrice > $unitPrice) ? round(($listingPrice - $unitPrice) * $qty, 2) : 0.0;
             $validItems[] = [
                 'product_id'             => $productId,
                 'stock_batch_id'         => $batchId,
@@ -142,7 +143,7 @@ class Orders extends BaseController
                 'unit_price'             => $unitPrice,
                 'listing_price_snapshot' => $listingPrice,
                 'unit_cost_snapshot'    => $unitCost,
-                'discount_amount'        => 0,
+                'discount_amount'        => $lineProductDiscount,
                 'line_total'             => $lineTotal,
             ];
         }

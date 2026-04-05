@@ -91,9 +91,33 @@
 
     <?php
     $coupon = $coupon ?? null;
-    $showLineDiscount = ! empty($order) && array_reduce($items, function ($carry, $r) {
-        return $carry || ((float) ($r['discount_amount'] ?? 0) > 0);
-    }, false);
+
+    $lineProductDiscount = static function (array $row): float {
+        $d = (float) ($row['discount_amount'] ?? 0);
+        if ($d > 0) {
+            return $d;
+        }
+        $qty = (int) ($row['qty'] ?? 0);
+        if ($qty < 1) {
+            return 0.0;
+        }
+        $lp = isset($row['listing_price_snapshot']) && $row['listing_price_snapshot'] !== '' && $row['listing_price_snapshot'] !== null
+            ? (float) $row['listing_price_snapshot'] : (float) ($row['unit_price'] ?? 0);
+        $sp = (float) ($row['unit_price'] ?? 0);
+        if ($lp > $sp) {
+            return round(($lp - $sp) * $qty, 2);
+        }
+
+        return 0.0;
+    };
+
+    $productDiscountTotal = 0.0;
+    foreach ($items as $invRow) {
+        $productDiscountTotal += $lineProductDiscount($invRow);
+    }
+    $productDiscountTotal = round($productDiscountTotal, 2);
+    $couponDiscount       = round((float) ($invoice['discount_amount'] ?? 0), 2);
+    $totalDiscountAll     = round($productDiscountTotal + $couponDiscount, 2);
     ?>
     <table>
         <thead>
@@ -102,17 +126,19 @@
                 <th>Description</th>
                 <th class="qty">Qty</th>
                 <th class="unit">Listing price</th>
-                <th class="unit">Price after discount</th>
-                <?php if ($showLineDiscount): ?><th class="unit">Line discount</th><?php endif; ?>
-                <th class="amount">Amount</th>
+                <th class="unit">Discount</th>
+                <th class="unit">Selling price</th>
+                <th class="amount">Total</th>
             </tr>
         </thead>
         <tbody>
             <?php $sr = 1; foreach ($items as $row): ?>
                 <?php
-                $listPrice   = (float) ($row['listing_price_snapshot'] ?? $row['unit_price'] ?? 0);
-                $sellingUnit = (float) ($row['unit_price'] ?? 0);
-                $lineTotal   = (float) ($row['line_total'] ?? 0);
+                $listPrice    = (float) ($row['listing_price_snapshot'] ?? $row['unit_price'] ?? 0);
+                $sellingUnit  = (float) ($row['unit_price'] ?? 0);
+                $lineTotal    = (float) ($row['line_total'] ?? ($sellingUnit * (int) ($row['qty'] ?? 0)));
+                $lineDisc     = $lineProductDiscount($row);
+                $discountCell = $lineDisc > 0 ? '−' . number_format($lineDisc, 2) : '—';
                 ?>
                 <tr>
                     <td><?= $sr++ ?></td>
@@ -122,10 +148,8 @@
                     </td>
                     <td class="qty"><?= (int) $row['qty'] ?></td>
                     <td class="unit"><?= number_format($listPrice, 2) ?></td>
+                    <td class="unit" style="color:#666;"><?= esc($discountCell) ?></td>
                     <td class="unit"><?= number_format($sellingUnit, 2) ?></td>
-                    <?php if ($showLineDiscount): ?>
-                        <td class="unit"><?= (float) ($row['discount_amount'] ?? 0) > 0 ? '-' . number_format((float) $row['discount_amount'], 2) : '—' ?></td>
-                    <?php endif; ?>
                     <td class="amount"><?= number_format($lineTotal, 2) ?></td>
                 </tr>
             <?php endforeach; ?>
@@ -135,17 +159,27 @@
     <div class="totals">
         <table>
             <tr><td>Subtotal</td><td style="text-align:right;"><?= number_format((float) $invoice['subtotal'], 2) ?></td></tr>
-            <?php if ((float) ($invoice['discount_amount'] ?? 0) > 0): ?>
+            <?php if ($productDiscountTotal > 0): ?>
                 <tr>
-                    <td>
-                        Coupon applied<?php if (! empty($coupon)): ?> <span style="color:#555;">(<?= esc($coupon['code']) ?><?php
-                            $dtype = $coupon['discount_type'] ?? '';
-                            $dval  = (float) ($coupon['discount_value'] ?? 0);
-                            if ($dtype === 'PERCENTAGE' || $dtype === 'percent'): ?> — <?= $dval ?>%<?php
-                            elseif ($dtype === 'FLAT' || $dtype === 'fixed'): ?> — <?= number_format($dval, 2) ?><?php endif; ?>)</span>
-                        <?php endif; ?>
-                    </td>
-                    <td style="text-align:right;">-<?= number_format((float) $invoice['discount_amount'], 2) ?></td>
+                    <td>Product discount</td>
+                    <td style="text-align:right;color:#666;">−<?= number_format($productDiscountTotal, 2) ?></td>
+                </tr>
+            <?php endif; ?>
+            <tr>
+                <td>
+                    Discount (coupon)<?php if (! empty($coupon)): ?> <span style="color:#555;font-size:11px;">(<?= esc($coupon['code']) ?><?php
+                        $dtype = $coupon['discount_type'] ?? '';
+                        $dval  = (float) ($coupon['discount_value'] ?? 0);
+                        if ($dtype === 'PERCENTAGE' || $dtype === 'percent'): ?> — <?= $dval ?>%<?php
+                        elseif ($dtype === 'FLAT' || $dtype === 'fixed'): ?> — <?= number_format($dval, 2) ?><?php endif; ?>)</span>
+                    <?php endif; ?>
+                </td>
+                <td style="text-align:right;"><?= $couponDiscount > 0 ? '−' . number_format($couponDiscount, 2) : number_format(0, 2) ?></td>
+            </tr>
+            <?php if ($totalDiscountAll > 0): ?>
+                <tr>
+                    <td>Total discount</td>
+                    <td style="text-align:right;color:#666;">−<?= number_format($totalDiscountAll, 2) ?></td>
                 </tr>
             <?php endif; ?>
             <?php if ((float) ($invoice['tax_amount'] ?? 0) > 0): ?>
