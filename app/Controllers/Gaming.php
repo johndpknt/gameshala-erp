@@ -155,9 +155,10 @@ class Gaming extends BaseController
         return view('layout/main', [
             'pageTitle' => 'Price Rules - Gaming',
             'content'   => view('gaming/price_rules', [
-                'categories' => $categories,
-                'modes'     => $modes,
-                'rules'     => $rules,
+                'categories'       => $categories,
+                'modes'            => $modes,
+                'rules'            => $rules,
+                'priceTypeLabels'  => GamingPriceRuleModel::priceTypeLabels(),
             ]),
         ]);
     }
@@ -167,7 +168,7 @@ class Gaming extends BaseController
         $rules = [
             'gaming_category_id' => 'required|integer',
             'gaming_mode_id'    => 'required|integer',
-            'price_type'        => 'required|in_list[PER_MINUTE,PER_30_MIN,PER_HOUR,FIXED]',
+            'price_type'        => 'required|in_list[' . GamingPriceRuleModel::priceTypeValidationList() . ']',
             'price'             => 'required|decimal',
         ];
         if (! $this->validate($rules)) {
@@ -197,7 +198,7 @@ class Gaming extends BaseController
         $rules = [
             'gaming_category_id' => 'required|integer',
             'gaming_mode_id'     => 'required|integer',
-            'price_type'         => 'required|in_list[PER_MINUTE,PER_30_MIN,PER_HOUR,FIXED]',
+            'price_type'         => 'required|in_list[' . GamingPriceRuleModel::priceTypeValidationList() . ']',
             'price'              => 'required|decimal',
         ];
         if (! $this->validate($rules)) {
@@ -373,6 +374,7 @@ class Gaming extends BaseController
                 'foodByVisit'          => $foodByVisit,
                 'foodItems'            => $foodItems,
                 'priceRules'           => $rulesWithNames,
+                'priceTypeLabels'      => GamingPriceRuleModel::priceTypeLabels(),
             ]),
         ]);
     }
@@ -476,14 +478,9 @@ class Gaming extends BaseController
         $start = strtotime($visit['start_time']);
         $end   = strtotime($endTime);
         $minutes = max(0, ($end - $start) / 60);
-        $price = (float) $rule['price'];
-        $priceType = $rule['price_type'] ?? 'FIXED';
-        $gamingAmount = match ($priceType) {
-            'PER_MINUTE' => round($price * $minutes, 2),
-            'PER_30_MIN' => round($price * ceil($minutes / 30), 2),
-            'PER_HOUR'   => round($price * ($minutes / 60), 2),
-            default     => round($price, 2),
-        };
+        $price       = (float) $rule['price'];
+        $priceType   = (string) ($rule['price_type'] ?? 'FIXED');
+        $gamingAmount = GamingPriceRuleModel::computeGamingAmountFromDuration($minutes, $price, $priceType);
 
         $foodRows = $this->visitFoodModel->where('gaming_visit_id', $id)->findAll();
         $foodAmount = 0.00;

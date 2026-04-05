@@ -18,7 +18,7 @@ class CreateGamingPriceRulesTable extends Migration
                 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 gaming_category_id BIGINT UNSIGNED NOT NULL,
                 gaming_mode_id BIGINT UNSIGNED NOT NULL,
-                price_type ENUM('PER_MINUTE', 'PER_30_MIN', 'PER_HOUR', 'FIXED') NOT NULL,
+                price_type ENUM('PER_MINUTE', 'PER_30_MIN', 'PER_HOUR', 'FIXED', 'MIN_15', 'MIN_25', 'MIN_30', 'MIN_45', 'MIN_60') NOT NULL,
                 price DECIMAL(10,2) NOT NULL,
                 PRIMARY KEY (id),
                 KEY idx_gaming_price_rules_category (gaming_category_id),

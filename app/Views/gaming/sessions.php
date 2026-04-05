@@ -9,6 +9,7 @@ $finishedTotalPages  = max(1, (int) ($finishedTotalPages ?? 1));
 $foodByVisit         = $foodByVisit ?? [];
 $foodItems           = $foodItems ?? [];
 $priceRules          = $priceRules ?? [];
+$priceTypeLabels     = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTypeLabels();
 $sessionsBaseUrl     = base_url('gaming/sessions');
 ?>
 <div class="container py-4 px-3 px-sm-4">
@@ -188,7 +189,11 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                         <select class="form-select" id="startPriceRule" name="gaming_price_rule_id" required>
                             <option value="">Select category / mode</option>
                             <?php foreach ($priceRules as $r): ?>
-                                <option value="<?= (int) $r['id'] ?>"><?= esc($r['category_name']) ?> / <?= esc($r['mode_name']) ?> (<?= esc($r['price_type']) ?> ₹<?= number_format((float) $r['price'], 2) ?>)</option>
+                                <?php
+                                $pt = (string) ($r['price_type'] ?? '');
+                                $ptLabel = $priceTypeLabels[$pt] ?? $pt;
+                                ?>
+                                <option value="<?= (int) $r['id'] ?>"><?= esc($r['category_name']) ?> / <?= esc($r['mode_name']) ?> (<?= esc($ptLabel) ?> ₹<?= number_format((float) $r['price'], 2) ?>)</option>
                             <?php endforeach; ?>
                         </select>
                     </div>

@@ -3,13 +3,7 @@ helper('form');
 $categories = $categories ?? [];
 $modes      = $modes ?? [];
 $rules      = $rules ?? [];
-
-$priceTypeLabels = [
-    'PER_MINUTE' => 'Per minute',
-    'PER_30_MIN' => 'Per 30 min',
-    'PER_HOUR'   => 'Per hour',
-    'FIXED'      => 'Fixed',
-];
+$priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTypeLabels();
 ?>
 <div class="container py-4 px-3 px-sm-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
