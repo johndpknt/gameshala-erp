@@ -31,6 +31,9 @@ class Products extends BaseController
     /**
      * GET api/products
      * Query params: q (search), sort, order, page, per_page, is_active, is_public, in_stock, min_price, max_price
+     *
+     * per_page: usual pagination (1–100), "all"/"-1" for every row, or SKU-type tokens (comma, &, or whitespace)
+     * such as "beve&food" / "beve,food" to return only products whose sku starts with BEVE- or FOOD-.
      */
     public function index(): ResponseInterface
     {
@@ -39,7 +42,7 @@ class Products extends BaseController
         $order   = strtolower((string) $this->request->getGet('order')) === 'desc' ? 'desc' : 'asc';
         $page    = max(1, (int) $this->request->getGet('page'));
         $perPageParam = (string) ($this->request->getGet('per_page') ?? '');
-        $perPageAll   = in_array(strtolower($perPageParam), ['all', '-1'], true);
+        $perPageAll   = in_array(strtolower(trim($perPageParam)), ['all', '-1'], true);
         $perPage      = $perPageAll ? 0 : min(100, max(1, (int) $this->request->getGet('per_page') ?: 20));
 
         $allowedSort = ['id', 'sku', 'name', 'slug', 'unit', 'is_public', 'is_active', 'created_at', 'updated_at'];
@@ -48,6 +51,21 @@ class Products extends BaseController
         }
 
         $builder = $this->productModel->builder();
+
+        if (! $perPageAll) {
+            $skuPrefixes = $this->skuPrefixesFromPerPageParam(trim($perPageParam));
+            if ($skuPrefixes !== []) {
+                $builder->groupStart();
+                foreach ($skuPrefixes as $i => $prefix) {
+                    if ($i === 0) {
+                        $builder->like('sku', $prefix, 'after');
+                    } else {
+                        $builder->orLike('sku', $prefix, 'after');
+                    }
+                }
+                $builder->groupEnd();
+            }
+        }
 
         if ($q !== null && $q !== '') {
             $builder->groupStart()
@@ -131,6 +149,39 @@ class Products extends BaseController
                 'total_pages'  => $totalPages,
             ],
         ]);
+    }
+
+    /**
+     * When per_page is not numeric and not "all"/"-1", treat it as a list of SKU family tokens
+     * (separated by comma, &, or whitespace). Known tokens map to sku LIKE 'PREFIX%'.
+     *
+     * @return list<string> e.g. ['BEVE-', 'FOOD-']
+     */
+    protected function skuPrefixesFromPerPageParam(string $perPageParam): array
+    {
+        if ($perPageParam === '' || ctype_digit($perPageParam)) {
+            return [];
+        }
+
+        $map = [
+            'beve' => 'BEVE-',
+            'food' => 'FOOD-',
+        ];
+
+        $tokens = preg_split('/[,;&\s]+/', $perPageParam, -1, PREG_SPLIT_NO_EMPTY);
+        if ($tokens === false) {
+            return [];
+        }
+
+        $prefixes = [];
+        foreach ($tokens as $token) {
+            $key = strtolower(trim($token));
+            if ($key !== '' && isset($map[$key])) {
+                $prefixes[] = $map[$key];
+            }
+        }
+
+        return array_values(array_unique($prefixes));
     }
 
     /**
