@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\ProductCatalogPrice;
 use App\Models\CustomerModel;
 use App\Models\FoodBeverageItemModel;
 use App\Models\GamingCategoryModel;
@@ -347,8 +348,9 @@ class Gaming extends BaseController
         $foodByVisit = [];
         if (! empty($visitIds)) {
             $rows = $this->visitFoodModel->builder()
-                ->select('gaming_visit_food_items.*, fbi.name AS item_name, fbi.unit_label')
+                ->select('gaming_visit_food_items.*, fbi.name AS fbi_name, fbi.unit_label, p.name AS product_name, COALESCE(fbi.name, p.name) AS item_name')
                 ->join($prefix . 'food_beverage_items fbi', 'fbi.id = gaming_visit_food_items.food_beverage_item_id', 'left')
+                ->join($prefix . 'products p', 'p.id = gaming_visit_food_items.product_id', 'left')
                 ->whereIn('gaming_visit_food_items.gaming_visit_id', $visitIds)
                 ->get()
                 ->getResultArray();
@@ -440,26 +442,51 @@ class Gaming extends BaseController
 
     public function addFood(): RedirectResponse
     {
-        $visitId = (int) $this->request->getPost('gaming_visit_id');
-        $itemId  = (int) $this->request->getPost('food_beverage_item_id');
-        $qty     = (int) $this->request->getPost('quantity');
-        if ($qty < 1) {
-            return redirect()->back()->with('error', 'Quantity must be at least 1.');
-        }
+        $visitId   = (int) $this->request->getPost('gaming_visit_id');
+        $itemId    = (int) $this->request->getPost('food_beverage_item_id');
+        $productId = (int) $this->request->getPost('product_id');
+        $qtyOwn    = max(1, (int) $this->request->getPost('quantity_own'));
+        $qtyVendor = max(1, (int) $this->request->getPost('quantity_vendor'));
         $visit = $this->visitModel->find($visitId);
         if (! $visit || ($visit['status'] ?? '') !== 'ONGOING') {
             return redirect()->back()->with('error', 'Session not found or not ongoing.');
+        }
+        if ($itemId > 0 && $productId > 0) {
+            return redirect()->back()->with('error', 'Choose either Beverage & Food (own) or (from vendor), not both.');
+        }
+        if ($productId > 0) {
+            $priced = ProductCatalogPrice::make()->unitPriceAndStockForProduct($productId);
+            if (! $priced['found']) {
+                return redirect()->back()->with('error', $priced['message'] ?? 'Could not price catalog product.');
+            }
+            if ($qtyVendor > $priced['total_stock']) {
+                return redirect()->back()->with('error', 'Quantity exceeds available stock (' . $priced['total_stock'] . ').');
+            }
+            $lineTotal = round($priced['unit_price'] * $qtyVendor, 2);
+            $this->visitFoodModel->insert([
+                'gaming_visit_id'       => $visitId,
+                'food_beverage_item_id' => null,
+                'product_id'            => $productId,
+                'quantity'              => $qtyVendor,
+                'line_total'            => $lineTotal,
+            ]);
+            $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added catalog food/beverage to session #' . $visitId);
+            return redirect()->back()->with('message', 'Item added to session.');
+        }
+        if ($itemId < 1) {
+            return redirect()->back()->with('error', 'Select an own menu item or a vendor catalog product.');
         }
         $item = $this->foodBeverageItemModel->find($itemId);
         if (! $item || ! (int) ($item['is_active'] ?? 1)) {
             return redirect()->back()->with('error', 'Item not found.');
         }
-        $lineTotal = round((float) $item['price'] * $qty, 2);
+        $lineTotal = round((float) $item['price'] * $qtyOwn, 2);
         $this->visitFoodModel->insert([
             'gaming_visit_id'       => $visitId,
             'food_beverage_item_id' => $itemId,
-            'quantity'             => $qty,
-            'line_total'           => $lineTotal,
+            'product_id'            => null,
+            'quantity'              => $qtyOwn,
+            'line_total'            => $lineTotal,
         ]);
         $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added food/beverage to session #' . $visitId);
         return redirect()->back()->with('message', 'Item added to session.');

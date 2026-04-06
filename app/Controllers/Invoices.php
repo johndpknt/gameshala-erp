@@ -103,8 +103,9 @@ class Invoices extends BaseController
             $visit = $this->gamingVisitModel->find($invoice['gaming_visit_id']);
             $prefix = $this->gamingVisitFoodModel->db->DBPrefix;
             $foodRows = $this->gamingVisitFoodModel->builder()
-                ->select('gaming_visit_food_items.*, fbi.name AS item_name')
+                ->select('gaming_visit_food_items.*, fbi.name AS fbi_name, p.name AS product_name, p.sku AS product_sku, COALESCE(fbi.name, p.name) AS item_name')
                 ->join($prefix . 'food_beverage_items fbi', 'fbi.id = gaming_visit_food_items.food_beverage_item_id', 'left')
+                ->join($prefix . 'products p', 'p.id = gaming_visit_food_items.product_id', 'left')
                 ->where('gaming_visit_food_items.gaming_visit_id', $invoice['gaming_visit_id'])
                 ->get()
                 ->getResultArray();
@@ -130,7 +131,7 @@ class Invoices extends BaseController
                     'unit_price'   => (float) $row['line_total'] / max(1, (int) $row['quantity']),
                     'line_total'   => (float) $row['line_total'],
                     'product_name' => $row['item_name'] ?? null,
-                    'sku'          => null,
+                    'sku'          => ! empty($row['product_sku']) ? (string) $row['product_sku'] : null,
                 ];
             }
         } else {

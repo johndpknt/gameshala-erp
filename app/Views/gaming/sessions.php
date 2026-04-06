@@ -219,28 +219,41 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
 
 <!-- Add Food Modal -->
 <div class="modal fade" id="addFoodModal" tabindex="-1" aria-labelledby="addFoodModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title fs-6" id="addFoodModalLabel"><i class="bi bi-cup-straw me-2"></i>Add food / beverage</h2>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <?= form_open(base_url('gaming/sessions/add-food')) ?>
+            <?= form_open(base_url('gaming/sessions/add-food'), ['id' => 'addFoodForm']) ?>
                 <?= csrf_field() ?>
                 <input type="hidden" name="gaming_visit_id" id="addFoodVisitId" value="">
                 <input type="hidden" name="food_beverage_item_id" id="addFoodItemId" value="">
+                <input type="hidden" name="product_id" id="addFoodProductId" value="">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="addFoodSearch" class="form-label">Item <span class="text-danger">*</span></label>
+                        <label for="addFoodSearch" class="form-label">Beverage &amp; Food (own)</label>
+                        <p class="text-muted small mb-2 mb-md-1">In-house menu from Gaming → Food &amp; beverages.</p>
                         <input type="text" class="form-control" id="addFoodSearch" placeholder="Search by name..." autocomplete="off">
                         <div id="addFoodResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
                         <div id="addFoodSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
-                        <div id="addFoodItemError" class="mt-2 text-danger small" style="display: none;"></div>
                     </div>
                     <div class="mb-3">
-                        <label for="addFoodQty" class="form-label">Quantity <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="addFoodQty" name="quantity" value="1" min="1" required>
+                        <label for="addFoodQtyOwn" class="form-label">Quantity (own)</label>
+                        <input type="number" class="form-control" id="addFoodQtyOwn" name="quantity_own" value="1" min="1">
                     </div>
+                    <div class="mb-2 pt-2 border-top">
+                        <label for="addVendorProductSearch" class="form-label">Beverage &amp; Food (from vendor)</label>
+                        <p class="text-muted small mb-2 mb-md-1">Catalog <code class="small">FOOD-</code> / <code class="small">BEVE-</code> products (search matches <code class="small">api/products</code> with FOOD-/BEVE- SKUs, in stock).</p>
+                        <input type="text" class="form-control" id="addVendorProductSearch" placeholder="Search by name or SKU..." autocomplete="off" maxlength="120">
+                        <div id="addVendorProductResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
+                        <div id="addVendorProductSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
+                    </div>
+                    <div class="mb-2">
+                        <label for="addFoodQtyVendor" class="form-label">Quantity (from vendor)</label>
+                        <input type="number" class="form-control" id="addFoodQtyVendor" name="quantity_vendor" value="1" min="1">
+                    </div>
+                    <div id="addFoodItemError" class="text-danger small" style="display: none;"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -254,8 +267,6 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
 <script>
 (function () {
     var baseUrl = '<?= base_url() ?>';
-    var csrfName = '<?= csrf_token() ?>';
-    var csrfVal = '<?= csrf_hash() ?>';
 
     function formatDuration(seconds) {
         if (seconds < 0) return '—';
@@ -300,12 +311,6 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
         customerError.style.display = 'none';
         customerResults.style.display = 'none';
         customerResults.innerHTML = '';
-    }
-    function showCustomerError(msg) {
-        customerIdEl.value = '';
-        customerDisplay.style.display = 'none';
-        customerError.textContent = msg;
-        customerError.style.display = 'block';
     }
     function clearCustomerMsg() {
         customerDisplay.style.display = 'none';
@@ -396,32 +401,52 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
         });
     }
 
+    var addFoodModal = document.getElementById('addFoodModal');
+    var addFoodForm = document.getElementById('addFoodForm');
+    var addFoodSearch = document.getElementById('addFoodSearch');
+    var addFoodItemId = document.getElementById('addFoodItemId');
+    var addFoodProductId = document.getElementById('addFoodProductId');
+    var addFoodResults = document.getElementById('addFoodResults');
+    var addFoodSelected = document.getElementById('addFoodSelected');
+    var addVendorProductSearch = document.getElementById('addVendorProductSearch');
+    var addVendorProductResults = document.getElementById('addVendorProductResults');
+    var addVendorProductSelected = document.getElementById('addVendorProductSelected');
+    var addFoodItemError = document.getElementById('addFoodItemError');
+    var vendorSearchTimeout = null;
+
+    function clearOwnFoodSelection() {
+        if (addFoodItemId) addFoodItemId.value = '';
+        if (addFoodSelected) addFoodSelected.style.display = 'none';
+    }
+    function clearVendorFoodSelection() {
+        if (addFoodProductId) addFoodProductId.value = '';
+        if (addVendorProductSelected) addVendorProductSelected.style.display = 'none';
+    }
+    function resetAddFoodModalFields() {
+        if (addFoodSearch) addFoodSearch.value = '';
+        if (addVendorProductSearch) addVendorProductSearch.value = '';
+        if (addFoodItemId) addFoodItemId.value = '';
+        if (addFoodProductId) addFoodProductId.value = '';
+        if (addFoodResults) { addFoodResults.innerHTML = ''; addFoodResults.style.display = 'none'; }
+        if (addVendorProductResults) { addVendorProductResults.innerHTML = ''; addVendorProductResults.style.display = 'none'; }
+        if (addFoodSelected) addFoodSelected.style.display = 'none';
+        if (addVendorProductSelected) addVendorProductSelected.style.display = 'none';
+        if (addFoodItemError) addFoodItemError.style.display = 'none';
+        var qo = document.getElementById('addFoodQtyOwn');
+        var qv = document.getElementById('addFoodQtyVendor');
+        if (qo) qo.value = '1';
+        if (qv) qv.value = '1';
+    }
+
     document.querySelectorAll('.add-food-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var visitId = this.getAttribute('data-visit-id');
             document.getElementById('addFoodVisitId').value = visitId;
             document.getElementById('addFoodModalLabel').textContent = 'Add food / beverage — Session #' + visitId;
-            var searchEl = document.getElementById('addFoodSearch');
-            var idEl = document.getElementById('addFoodItemId');
-            var resultsEl = document.getElementById('addFoodResults');
-            var selectedEl = document.getElementById('addFoodSelected');
-            var errEl = document.getElementById('addFoodItemError');
-            if (searchEl) searchEl.value = '';
-            if (idEl) idEl.value = '';
-            if (resultsEl) { resultsEl.innerHTML = ''; resultsEl.style.display = 'none'; }
-            if (selectedEl) selectedEl.style.display = 'none';
-            if (errEl) { errEl.style.display = 'none'; }
-            document.getElementById('addFoodQty').value = '1';
-            new bootstrap.Modal(document.getElementById('addFoodModal')).show();
+            resetAddFoodModalFields();
+            new bootstrap.Modal(addFoodModal).show();
         });
     });
-
-    var addFoodSearch = document.getElementById('addFoodSearch');
-    var addFoodItemId = document.getElementById('addFoodItemId');
-    var addFoodResults = document.getElementById('addFoodResults');
-    var addFoodSelected = document.getElementById('addFoodSelected');
-    var addFoodItemError = document.getElementById('addFoodItemError');
-    var addFoodForm = document.getElementById('addFoodModal') ? document.getElementById('addFoodModal').querySelector('form') : null;
 
     if (addFoodSearch && addFoodResults) {
         function renderFoodResults(matches) {
@@ -440,13 +465,15 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                     a.textContent = label;
                     a.addEventListener('click', function (e) {
                         e.preventDefault();
+                        clearVendorFoodSelection();
+                        if (addVendorProductSearch) addVendorProductSearch.value = '';
                         addFoodItemId.value = f.id;
                         addFoodSelected.textContent = 'Selected: ' + label;
                         addFoodSelected.style.display = 'block';
                         addFoodSearch.value = f.name;
                         addFoodResults.style.display = 'none';
                         addFoodResults.innerHTML = '';
-                        addFoodItemError.style.display = 'none';
+                        if (addFoodItemError) addFoodItemError.style.display = 'none';
                     });
                     addFoodResults.appendChild(a);
                 });
@@ -454,18 +481,22 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
             addFoodResults.style.display = 'block';
         }
         function refreshFoodResults() {
-            if (addFoodItemId.value) return;
-            addFoodItemId.value = '';
-            addFoodSelected.style.display = 'none';
-            addFoodItemError.style.display = 'none';
+            if (addFoodProductId && addFoodProductId.value) return;
+            if (addFoodItemError) addFoodItemError.style.display = 'none';
             var q = (addFoodSearch.value || '').trim().toLowerCase();
             var matches = q.length < 1
                 ? foodItemsData.slice()
                 : foodItemsData.filter(function (f) { return (f.name || '').toLowerCase().indexOf(q) !== -1; });
             renderFoodResults(matches);
         }
-        addFoodSearch.addEventListener('input', refreshFoodResults);
+        addFoodSearch.addEventListener('input', function () {
+            clearVendorFoodSelection();
+            if (addVendorProductSearch) addVendorProductSearch.value = '';
+            clearOwnFoodSelection();
+            refreshFoodResults();
+        });
         addFoodSearch.addEventListener('focus', function () {
+            if (addFoodProductId && addFoodProductId.value) return;
             if (addFoodItemId.value) return;
             refreshFoodResults();
         });
@@ -474,12 +505,106 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
         });
     }
 
+    if (addVendorProductSearch && addVendorProductResults) {
+        function fetchVendorProducts(q) {
+            return fetch(baseUrl + 'api/products?per_page=beve,food&is_active=1&in_stock=1&q=' + encodeURIComponent(q || ''))
+                .then(function (r) { return r.json(); });
+        }
+        function renderVendorResults(products) {
+            addVendorProductResults.innerHTML = '';
+            if (!products || products.length === 0) {
+                var empty = document.createElement('div');
+                empty.className = 'list-group-item text-muted small';
+                empty.textContent = 'No matching catalog items (FOOD-/BEVE- with stock).';
+                addVendorProductResults.appendChild(empty);
+            } else {
+                products.forEach(function (p) {
+                    var price = p.selling_price;
+                    var priceLabel = price !== null && price !== undefined && !isNaN(Number(price))
+                        ? '₹' + Number(price).toFixed(2)
+                        : 'No price';
+                    var label = (p.name || '') + ' — ' + (p.sku || '') + ' — ' + priceLabel + (p.unit ? ' / ' + p.unit : '');
+                    var a = document.createElement('a');
+                    a.href = '#';
+                    a.className = 'list-group-item list-group-item-action' + (price === null || price === undefined ? ' text-muted' : '');
+                    a.textContent = label;
+                    a.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        if (price === null || price === undefined || isNaN(Number(price))) {
+                            if (addFoodItemError) {
+                                addFoodItemError.textContent = 'This product has no selling price. Set batch selling price or procurement rule.';
+                                addFoodItemError.style.display = 'block';
+                            }
+                            return;
+                        }
+                        clearOwnFoodSelection();
+                        if (addFoodSearch) addFoodSearch.value = '';
+                        addFoodProductId.value = String(p.id);
+                        addVendorProductSelected.textContent = 'Selected (vendor): ' + label;
+                        addVendorProductSelected.style.display = 'block';
+                        addVendorProductSearch.value = p.name || '';
+                        addVendorProductResults.style.display = 'none';
+                        addVendorProductResults.innerHTML = '';
+                        if (addFoodItemError) addFoodItemError.style.display = 'none';
+                    });
+                    addVendorProductResults.appendChild(a);
+                });
+            }
+            addVendorProductResults.style.display = 'block';
+        }
+        function runVendorSearch() {
+            if (addFoodItemId && addFoodItemId.value) return;
+            if (addFoodProductId && addFoodProductId.value) return;
+            var q = (addVendorProductSearch.value || '').trim();
+            if (q.length > 0 && q.length < 2) {
+                addVendorProductResults.innerHTML = '';
+                addVendorProductResults.style.display = 'none';
+                return;
+            }
+            fetchVendorProducts(q).then(function (data) {
+                if (addFoodItemId && addFoodItemId.value) return;
+                if (addFoodProductId && addFoodProductId.value) return;
+                var list = (data && data.data) ? data.data : [];
+                renderVendorResults(list);
+            }).catch(function () {
+                renderVendorResults([]);
+            });
+        }
+        addVendorProductSearch.addEventListener('input', function () {
+            clearOwnFoodSelection();
+            if (addFoodSearch) addFoodSearch.value = '';
+            clearVendorFoodSelection();
+            clearTimeout(vendorSearchTimeout);
+            vendorSearchTimeout = setTimeout(runVendorSearch, 300);
+        });
+        addVendorProductSearch.addEventListener('focus', function () {
+            if (addFoodItemId && addFoodItemId.value) return;
+            if (addFoodProductId && addFoodProductId.value) return;
+            runVendorSearch();
+        });
+        addVendorProductSearch.addEventListener('blur', function () {
+            setTimeout(function () { addVendorProductResults.style.display = 'none'; }, 200);
+        });
+    }
+
     if (addFoodForm) {
         addFoodForm.addEventListener('submit', function (e) {
-            if (!addFoodItemId.value || addFoodItemId.value === '') {
+            var hasOwn = addFoodItemId && addFoodItemId.value && addFoodItemId.value !== '';
+            var hasVendor = addFoodProductId && addFoodProductId.value && addFoodProductId.value !== '';
+            if (!hasOwn && !hasVendor) {
                 e.preventDefault();
-                addFoodItemError.textContent = 'Please search and select an item.';
-                addFoodItemError.style.display = 'block';
+                if (addFoodItemError) {
+                    addFoodItemError.textContent = 'Select either Beverage & Food (own) or (from vendor).';
+                    addFoodItemError.style.display = 'block';
+                }
+                return false;
+            }
+            if (hasOwn && hasVendor) {
+                e.preventDefault();
+                if (addFoodItemError) {
+                    addFoodItemError.textContent = 'Choose only one source (own or vendor).';
+                    addFoodItemError.style.display = 'block';
+                }
                 return false;
             }
         });

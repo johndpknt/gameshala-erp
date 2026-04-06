@@ -6,17 +6,43 @@ use CodeIgniter\Database\Migration;
 
 class AddIsActiveToGamingCategoriesAndModes extends Migration
 {
-    public function up(): void
+    public function up()
     {
-        $prefix = $this->db->DBPrefix;
-        $this->db->query("ALTER TABLE `{$prefix}gaming_categories` ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER name");
-        $this->db->query("ALTER TABLE `{$prefix}gaming_modes` ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER name");
+        // gaming_categories
+        if (!$this->db->fieldExists('is_active', 'gaming_categories')) {
+            $this->forge->addColumn('gaming_categories', [
+                'is_active' => [
+                    'type' => 'TINYINT',
+                    'constraint' => 1,
+                    'default' => 1,
+                    'after' => 'name',
+                ],
+            ]);
+        }
+
+        // gaming_modes
+        if (!$this->db->fieldExists('is_active', 'gaming_modes')) {
+            $this->forge->addColumn('gaming_modes', [
+                'is_active' => [
+                    'type' => 'TINYINT',
+                    'constraint' => 1,
+                    'default' => 1,
+                    'after' => 'name',
+                ],
+            ]);
+        }
     }
 
-    public function down(): void
+    public function down()
     {
-        $prefix = $this->db->DBPrefix;
-        $this->db->query("ALTER TABLE `{$prefix}gaming_categories` DROP COLUMN is_active");
-        $this->db->query("ALTER TABLE `{$prefix}gaming_modes` DROP COLUMN is_active");
+        // gaming_categories
+        if ($this->db->fieldExists('is_active', 'gaming_categories')) {
+            $this->forge->dropColumn('gaming_categories', 'is_active');
+        }
+
+        // gaming_modes
+        if ($this->db->fieldExists('is_active', 'gaming_modes')) {
+            $this->forge->dropColumn('gaming_modes', 'is_active');
+        }
     }
 }
