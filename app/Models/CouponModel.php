@@ -30,4 +30,22 @@ class CouponModel extends Model
     protected $createdField   = 'created_at';
     protected $updatedField   = 'updated_at';
     protected $dateFormat    = 'datetime';
+
+    /**
+     * Find coupon by code (trim + case-insensitive on stored code).
+     */
+    public function findByCode(string $code): ?array
+    {
+        $t = strtolower(trim($code));
+        if ($t === '') {
+            return null;
+        }
+        $table = $this->db->DBPrefix . $this->table;
+        $row   = $this->db->query(
+            'SELECT * FROM ' . $table . ' WHERE LOWER(TRIM(`code`)) = ? LIMIT 1',
+            [$t]
+        )->getRowArray();
+
+        return $row ?: null;
+    }
 }

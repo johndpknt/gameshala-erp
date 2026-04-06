@@ -102,7 +102,7 @@ class Orders extends BaseController
     public function store(): RedirectResponse
     {
         $customerId = $this->request->getPost('customer_id');
-        $couponCode = $this->request->getPost('coupon_code');
+        $couponCode = trim((string) $this->request->getPost('coupon_code'));
         $items      = $this->request->getPost('items'); // array of [product_id, batch_id, qty, unit_price, unit_cost_snapshot]
 
         if (empty($customerId) || empty($items) || ! is_array($items)) {
@@ -152,8 +152,10 @@ class Orders extends BaseController
             return redirect()->back()->withInput()->with('error', 'Add at least one product with valid quantity.');
         }
 
-        if ($couponCode !== null && $couponCode !== '') {
-            $coupon = $this->couponModel->where('code', $couponCode)->first();
+        $subtotal = round($subtotal, 2);
+
+        if ($couponCode !== '') {
+            $coupon = $this->couponModel->findByCode($couponCode);
             $couponResult = $this->validateCouponForSubtotal($coupon, $subtotal);
             if ($couponResult['valid']) {
                 $couponId       = (int) $coupon['id'];
@@ -321,16 +323,17 @@ class Orders extends BaseController
     }
 
     /**
-     * API: Validate coupon. POST code= & subtotal=
+     * API: Validate coupon. GET or POST: code=, subtotal=
+     * (GET avoids CSRF token staleness after other POSTs on the same page.)
      */
     public function apiValidateCoupon(): ResponseInterface
     {
-        $code     = $this->request->getPost('code');
-        $subtotal = (float) $this->request->getPost('subtotal');
-        if ($code === null || $code === '') {
+        $code = trim((string) ($this->request->getGet('code') ?? $this->request->getPost('code') ?? ''));
+        $subtotal = round((float) ($this->request->getGet('subtotal') ?? $this->request->getPost('subtotal') ?? 0), 2);
+        if ($code === '') {
             return $this->response->setJSON(['valid' => false, 'message' => 'Coupon code is required.']);
         }
-        $coupon = $this->couponModel->where('code', $code)->first();
+        $coupon = $this->couponModel->findByCode($code);
         $result = $this->validateCouponForSubtotal($coupon, $subtotal);
         if ($result['valid'] && $coupon) {
             $result['code'] = $coupon['code'] ?? '';
@@ -513,6 +516,7 @@ class Orders extends BaseController
      */
     protected function validateCouponForSubtotal(?array $coupon, float $subtotal): array
     {
+        $subtotal = round($subtotal, 2);
         if (! $coupon || ! (int) ($coupon['is_active'] ?? 0)) {
             return ['valid' => false, 'discount_amount' => 0.0, 'message' => 'Invalid or inactive coupon.'];
         }
@@ -523,12 +527,16 @@ class Orders extends BaseController
         if (($coupon['valid_to'] ?? '') < $now) {
             return ['valid' => false, 'discount_amount' => 0.0, 'message' => 'Coupon has expired.'];
         }
-        $usageLimit = isset($coupon['usage_limit']) ? (int) $coupon['usage_limit'] : null;
-        $usedCount  = (int) ($coupon['used_count'] ?? 0);
-        if ($usageLimit !== null && $usedCount >= $usageLimit) {
+        $usageLimit = isset($coupon['usage_limit']) && $coupon['usage_limit'] !== '' && $coupon['usage_limit'] !== null
+            ? (int) $coupon['usage_limit']
+            : null;
+        $usedCount = (int) ($coupon['used_count'] ?? 0);
+        if ($usageLimit !== null && $usageLimit > 0 && $usedCount >= $usageLimit) {
             return ['valid' => false, 'discount_amount' => 0.0, 'message' => 'Coupon usage limit reached.'];
         }
-        $minOrder = isset($coupon['min_order_amount']) ? (float) $coupon['min_order_amount'] : null;
+        $minOrder = isset($coupon['min_order_amount']) && $coupon['min_order_amount'] !== null && $coupon['min_order_amount'] !== ''
+            ? round((float) $coupon['min_order_amount'], 2)
+            : null;
         if ($minOrder !== null && $subtotal < $minOrder) {
             return ['valid' => false, 'discount_amount' => 0.0, 'message' => 'Minimum order amount not met.'];
         }

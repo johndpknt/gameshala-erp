@@ -54,6 +54,7 @@ $routes->get('sales/invoices', 'Invoices::index');
 $routes->get('sales/invoices/view/(:num)', 'Invoices::view/$1');
 $routes->get('sales/orders/api/products', 'Orders::apiProducts');
 $routes->get('sales/orders/api/customer-by-phone', 'Orders::apiCustomerByPhone');
+$routes->get('sales/orders/api/validate-coupon', 'Orders::apiValidateCoupon');
 $routes->post('sales/orders/api/validate-coupon', 'Orders::apiValidateCoupon');
 $routes->get('sales/orders/api/product-price', 'Orders::apiProductPrice');
 $routes->post('sales/orders/api/quick-add-customer', 'Orders::apiQuickAddCustomer');

@@ -244,7 +244,7 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                     </div>
                     <div class="mb-2 pt-2 border-top">
                         <label for="addVendorProductSearch" class="form-label">Beverage &amp; Food (from vendor)</label>
-                        <p class="text-muted small mb-2 mb-md-1">Catalog <code class="small">FOOD-</code> / <code class="small">BEVE-</code> products (search matches <code class="small">api/products</code> with FOOD-/BEVE- SKUs, in stock).</p>
+                        <p class="text-muted small mb-2 mb-md-1">Catalog <code class="small">FOOD-</code> / <code class="small">BEVE-</code> products (same as <code class="small">api/products?per_page=beve&amp;food=</code>). Stock and price are enforced when you add.</p>
                         <input type="text" class="form-control" id="addVendorProductSearch" placeholder="Search by name or SKU..." autocomplete="off" maxlength="120">
                         <div id="addVendorProductResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
                         <div id="addVendorProductSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
@@ -267,6 +267,7 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
 <script>
 (function () {
     var baseUrl = '<?= base_url() ?>';
+    var apiRoot = baseUrl.replace(/\/?$/, '/');
 
     function formatDuration(seconds) {
         if (seconds < 0) return '—';
@@ -465,8 +466,6 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                     a.textContent = label;
                     a.addEventListener('click', function (e) {
                         e.preventDefault();
-                        clearVendorFoodSelection();
-                        if (addVendorProductSearch) addVendorProductSearch.value = '';
                         addFoodItemId.value = f.id;
                         addFoodSelected.textContent = 'Selected: ' + label;
                         addFoodSelected.style.display = 'block';
@@ -481,7 +480,6 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
             addFoodResults.style.display = 'block';
         }
         function refreshFoodResults() {
-            if (addFoodProductId && addFoodProductId.value) return;
             if (addFoodItemError) addFoodItemError.style.display = 'none';
             var q = (addFoodSearch.value || '').trim().toLowerCase();
             var matches = q.length < 1
@@ -490,14 +488,10 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
             renderFoodResults(matches);
         }
         addFoodSearch.addEventListener('input', function () {
-            clearVendorFoodSelection();
-            if (addVendorProductSearch) addVendorProductSearch.value = '';
             clearOwnFoodSelection();
             refreshFoodResults();
         });
         addFoodSearch.addEventListener('focus', function () {
-            if (addFoodProductId && addFoodProductId.value) return;
-            if (addFoodItemId.value) return;
             refreshFoodResults();
         });
         addFoodSearch.addEventListener('blur', function () {
@@ -507,15 +501,29 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
 
     if (addVendorProductSearch && addVendorProductResults) {
         function fetchVendorProducts(q) {
-            return fetch(baseUrl + 'api/products?per_page=beve,food&is_active=1&in_stock=1&q=' + encodeURIComponent(q || ''))
-                .then(function (r) { return r.json(); });
+            var params = new URLSearchParams();
+            params.set('per_page', 'beve');
+            params.set('food', '');
+            params.set('is_active', '1');
+            if ((q || '').trim() !== '') {
+                params.set('q', (q || '').trim());
+            }
+            return fetch(apiRoot + 'api/products?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) {
+                if (!r.ok) {
+                    return Promise.reject(new Error('HTTP ' + r.status));
+                }
+                return r.json();
+            });
         }
         function renderVendorResults(products) {
             addVendorProductResults.innerHTML = '';
             if (!products || products.length === 0) {
                 var empty = document.createElement('div');
                 empty.className = 'list-group-item text-muted small';
-                empty.textContent = 'No matching catalog items (FOOD-/BEVE- with stock).';
+                empty.textContent = 'No matching FOOD-/BEVE- items. (Stock is checked when you add.)';
                 addVendorProductResults.appendChild(empty);
             } else {
                 products.forEach(function (p) {
@@ -537,8 +545,6 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                             }
                             return;
                         }
-                        clearOwnFoodSelection();
-                        if (addFoodSearch) addFoodSearch.value = '';
                         addFoodProductId.value = String(p.id);
                         addVendorProductSelected.textContent = 'Selected (vendor): ' + label;
                         addVendorProductSelected.style.display = 'block';
@@ -553,8 +559,6 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
             addVendorProductResults.style.display = 'block';
         }
         function runVendorSearch() {
-            if (addFoodItemId && addFoodItemId.value) return;
-            if (addFoodProductId && addFoodProductId.value) return;
             var q = (addVendorProductSearch.value || '').trim();
             if (q.length > 0 && q.length < 2) {
                 addVendorProductResults.innerHTML = '';
@@ -562,24 +566,23 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                 return;
             }
             fetchVendorProducts(q).then(function (data) {
-                if (addFoodItemId && addFoodItemId.value) return;
-                if (addFoodProductId && addFoodProductId.value) return;
                 var list = (data && data.data) ? data.data : [];
                 renderVendorResults(list);
             }).catch(function () {
-                renderVendorResults([]);
+                addVendorProductResults.innerHTML = '';
+                var err = document.createElement('div');
+                err.className = 'list-group-item text-danger small';
+                err.textContent = 'Could not load catalog. Refresh the page or check you are logged in.';
+                addVendorProductResults.appendChild(err);
+                addVendorProductResults.style.display = 'block';
             });
         }
         addVendorProductSearch.addEventListener('input', function () {
-            clearOwnFoodSelection();
-            if (addFoodSearch) addFoodSearch.value = '';
             clearVendorFoodSelection();
             clearTimeout(vendorSearchTimeout);
             vendorSearchTimeout = setTimeout(runVendorSearch, 300);
         });
         addVendorProductSearch.addEventListener('focus', function () {
-            if (addFoodItemId && addFoodItemId.value) return;
-            if (addFoodProductId && addFoodProductId.value) return;
             runVendorSearch();
         });
         addVendorProductSearch.addEventListener('blur', function () {
@@ -594,15 +597,7 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
             if (!hasOwn && !hasVendor) {
                 e.preventDefault();
                 if (addFoodItemError) {
-                    addFoodItemError.textContent = 'Select either Beverage & Food (own) or (from vendor).';
-                    addFoodItemError.style.display = 'block';
-                }
-                return false;
-            }
-            if (hasOwn && hasVendor) {
-                e.preventDefault();
-                if (addFoodItemError) {
-                    addFoodItemError.textContent = 'Choose only one source (own or vendor).';
+                    addFoodItemError.textContent = 'Select at least one: own menu item and/or vendor catalog product.';
                     addFoodItemError.style.display = 'block';
                 }
                 return false;

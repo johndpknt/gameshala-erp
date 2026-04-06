@@ -30,15 +30,13 @@ if ($receivedAt && strlen($receivedAt) >= 16) {
                         </div>
 
                         <?php
-$showProductSearch = count($products) > 10;
-$showVendorSearch  = count($vendors) > 10;
+// Always show product filter (matches prod UX); vendor filter when list is large.
+$showVendorSearch = count($vendors) > 10;
 ?>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="product_id" class="form-label">Product <span class="text-danger">*</span></label>
-                                <?php if ($showProductSearch): ?>
                                 <input type="text" class="form-control mb-1" id="product_search" placeholder="Type to search products..." autocomplete="off" aria-label="Filter products">
-                                <?php endif; ?>
                                 <select class="form-select select-searchable" id="product_id" name="product_id" required data-search-input="product_search">
                                     <option value="">— Select product —</option>
                                     <?php foreach ($products as $p): ?>

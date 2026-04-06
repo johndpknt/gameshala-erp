@@ -43,8 +43,17 @@ class Products extends BaseController
         $order   = strtolower((string) $this->request->getGet('order')) === 'desc' ? 'desc' : 'asc';
         $page    = max(1, (int) $this->request->getGet('page'));
         $perPageParam = (string) ($this->request->getGet('per_page') ?? '');
-        $perPageAll   = in_array(strtolower(trim($perPageParam)), ['all', '-1'], true);
+        $trimmedPerPage = trim($perPageParam);
+        $perPageAll   = in_array(strtolower($trimmedPerPage), ['all', '-1'], true);
+        $skuPrefixes  = [];
+        if (! $perPageAll) {
+            $skuPrefixes = $this->skuPrefixesFromPerPageParam($trimmedPerPage);
+            $skuPrefixes = $this->mergeSkuPrefixesForBeveAndFoodQuery($trimmedPerPage, $skuPrefixes);
+        }
         $perPage      = $perPageAll ? 0 : min(100, max(1, (int) $this->request->getGet('per_page') ?: 20));
+        if (! $perPageAll && $skuPrefixes !== []) {
+            $perPage = 100;
+        }
 
         $allowedSort = ['id', 'sku', 'name', 'slug', 'unit', 'is_public', 'is_active', 'created_at', 'updated_at'];
         if ($sort === null || ! in_array($sort, $allowedSort, true)) {
@@ -53,29 +62,32 @@ class Products extends BaseController
 
         $builder = $this->productModel->builder();
 
-        if (! $perPageAll) {
-            $skuPrefixes = $this->skuPrefixesFromPerPageParam(trim($perPageParam));
-            $skuPrefixes = $this->mergeSkuPrefixesForBeveAndFoodQuery(trim($perPageParam), $skuPrefixes);
-            if ($skuPrefixes !== []) {
-                $builder->groupStart();
-                foreach ($skuPrefixes as $i => $prefix) {
-                    if ($i === 0) {
-                        $builder->like('sku', $prefix, 'after');
-                    } else {
-                        $builder->orLike('sku', $prefix, 'after');
-                    }
+        if (! $perPageAll && $skuPrefixes !== []) {
+            $builder->groupStart();
+            foreach ($skuPrefixes as $i => $prefix) {
+                if ($i === 0) {
+                    $builder->like('sku', $prefix, 'after');
+                } else {
+                    $builder->orLike('sku', $prefix, 'after');
                 }
-                $builder->groupEnd();
             }
+            $builder->groupEnd();
         }
 
         if ($q !== null && $q !== '') {
-            $builder->groupStart()
-                ->like('name', $q)
-                ->orLike('sku', $q)
-                ->orLike('slug', $q)
-                ->orLike('description', $q)
-                ->groupEnd();
+            $qt = trim((string) $q);
+            if (preg_match('/^(FOOD|BEVE)-?$/i', $qt, $m)) {
+                $builder->groupStart()
+                    ->like('sku', strtoupper($m[1]) . '-', 'after')
+                    ->groupEnd();
+            } else {
+                $builder->groupStart()
+                    ->like('name', $q)
+                    ->orLike('sku', $q)
+                    ->orLike('slug', $q)
+                    ->orLike('description', $q)
+                    ->groupEnd();
+            }
         }
 
         $isActive = $this->request->getGet('is_active');

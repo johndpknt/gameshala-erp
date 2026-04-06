@@ -162,6 +162,7 @@
 <script>
 (function () {
     var baseUrl = '<?= base_url() ?>';
+    var apiRoot = baseUrl.replace(/\/?$/, '/');
     var csrfName = '<?= csrf_token() ?>';
     var csrfVal = '<?= csrf_hash() ?>';
 
@@ -499,6 +500,7 @@
         lineItems.forEach(function (item) {
             subtotal += (item.unit_price || 0) * (item.qty || 1);
         });
+        subtotal = Math.round(subtotal * 100) / 100;
         if (!code) {
             couponMessage.textContent = 'Enter a coupon code.';
             couponMessage.className = 'mt-2 small text-danger';
@@ -509,16 +511,30 @@
             updateAppliedCouponLabel();
             return;
         }
-        var fd = new FormData();
-        fd.append('code', code);
-        fd.append('subtotal', subtotal.toFixed(2));
-        fd.append(csrfName, csrfVal);
-        fetch(baseUrl + 'sales/orders/api/validate-coupon', {
-            method: 'POST',
-            body: fd,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        if (lineItems.length === 0) {
+            couponMessage.textContent = 'Add products to the order before applying a coupon.';
+            couponMessage.className = 'mt-2 small text-danger';
+            couponMessage.style.display = 'block';
+            appliedCouponDiscount = 0;
+            appliedCouponCode = '';
+            updateTotals();
+            updateAppliedCouponLabel();
+            return;
+        }
+        var params = new URLSearchParams();
+        params.set('code', code);
+        params.set('subtotal', String(subtotal));
+        fetch(apiRoot + 'sales/orders/api/validate-coupon?' + params.toString(), {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
         })
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                if (!r.ok) {
+                    return Promise.reject(new Error('HTTP ' + r.status));
+                }
+                return r.json();
+            })
             .then(function (data) {
                 couponMessage.style.display = 'block';
                 if (data.valid) {
@@ -536,7 +552,7 @@
                 updateAppliedCouponLabel();
             })
             .catch(function () {
-                couponMessage.textContent = 'Could not validate coupon.';
+                couponMessage.textContent = 'Could not validate coupon. Check your connection or try again.';
                 couponMessage.className = 'mt-2 small text-danger';
                 couponMessage.style.display = 'block';
             });

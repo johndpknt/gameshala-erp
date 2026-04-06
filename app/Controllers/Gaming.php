@@ -451,18 +451,28 @@ class Gaming extends BaseController
         if (! $visit || ($visit['status'] ?? '') !== 'ONGOING') {
             return redirect()->back()->with('error', 'Session not found or not ongoing.');
         }
-        if ($itemId > 0 && $productId > 0) {
-            return redirect()->back()->with('error', 'Choose either Beverage & Food (own) or (from vendor), not both.');
+        if ($itemId < 1 && $productId < 1) {
+            return redirect()->back()->with('error', 'Select an own menu item and/or a vendor catalog product.');
+        }
+        $ownItem = null;
+        if ($itemId > 0) {
+            $ownItem = $this->foodBeverageItemModel->find($itemId);
+            if (! $ownItem || ! (int) ($ownItem['is_active'] ?? 1)) {
+                return redirect()->back()->with('error', 'Own menu item not found.');
+            }
+        }
+        $pricedCatalog = null;
+        if ($productId > 0) {
+            $pricedCatalog = ProductCatalogPrice::make()->unitPriceAndStockForProduct($productId);
+            if (! $pricedCatalog['found']) {
+                return redirect()->back()->with('error', $pricedCatalog['message'] ?? 'Could not price catalog product.');
+            }
+            if ($qtyVendor > $pricedCatalog['total_stock']) {
+                return redirect()->back()->with('error', 'Quantity exceeds available stock (' . $pricedCatalog['total_stock'] . ').');
+            }
         }
         if ($productId > 0) {
-            $priced = ProductCatalogPrice::make()->unitPriceAndStockForProduct($productId);
-            if (! $priced['found']) {
-                return redirect()->back()->with('error', $priced['message'] ?? 'Could not price catalog product.');
-            }
-            if ($qtyVendor > $priced['total_stock']) {
-                return redirect()->back()->with('error', 'Quantity exceeds available stock (' . $priced['total_stock'] . ').');
-            }
-            $lineTotal = round($priced['unit_price'] * $qtyVendor, 2);
+            $lineTotal = round($pricedCatalog['unit_price'] * $qtyVendor, 2);
             $this->visitFoodModel->insert([
                 'gaming_visit_id'       => $visitId,
                 'food_beverage_item_id' => null,
@@ -471,25 +481,20 @@ class Gaming extends BaseController
                 'line_total'            => $lineTotal,
             ]);
             $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added catalog food/beverage to session #' . $visitId);
-            return redirect()->back()->with('message', 'Item added to session.');
         }
-        if ($itemId < 1) {
-            return redirect()->back()->with('error', 'Select an own menu item or a vendor catalog product.');
+        if ($itemId > 0 && $ownItem !== null) {
+            $lineTotal = round((float) $ownItem['price'] * $qtyOwn, 2);
+            $this->visitFoodModel->insert([
+                'gaming_visit_id'       => $visitId,
+                'food_beverage_item_id' => $itemId,
+                'product_id'            => null,
+                'quantity'              => $qtyOwn,
+                'line_total'            => $lineTotal,
+            ]);
+            $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added food/beverage to session #' . $visitId);
         }
-        $item = $this->foodBeverageItemModel->find($itemId);
-        if (! $item || ! (int) ($item['is_active'] ?? 1)) {
-            return redirect()->back()->with('error', 'Item not found.');
-        }
-        $lineTotal = round((float) $item['price'] * $qtyOwn, 2);
-        $this->visitFoodModel->insert([
-            'gaming_visit_id'       => $visitId,
-            'food_beverage_item_id' => $itemId,
-            'product_id'            => null,
-            'quantity'              => $qtyOwn,
-            'line_total'            => $lineTotal,
-        ]);
-        $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added food/beverage to session #' . $visitId);
-        return redirect()->back()->with('message', 'Item added to session.');
+        $msg = ($productId > 0 && $itemId > 0) ? 'Both items added to session.' : 'Item added to session.';
+        return redirect()->back()->with('message', $msg);
     }
 
     public function endSession(int $id): RedirectResponse
