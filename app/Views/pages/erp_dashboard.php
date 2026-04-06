@@ -36,6 +36,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php if (is_admin()): ?>
             <div class="col-6 col-md-4 col-lg-2">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -44,6 +45,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
             <div class="col-6 col-md-4 col-lg-2">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -68,6 +70,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php if (is_admin()): ?>
             <div class="col-6 col-md-4 col-lg-2">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -100,9 +103,11 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
         </div>
     </section>
 
+    <?php if (is_admin()): ?>
     <section class="mb-4">
         <h2 class="h6 text-uppercase text-muted fw-semibold mb-3"><i class="bi bi-receipt me-1"></i>Sales report</h2>
         <div class="row g-3">
@@ -145,6 +150,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
             </div>
         </div>
     </section>
+    <?php endif; ?>
 
     <div class="row g-4">
         <div class="col-12 col-lg-7">
@@ -206,13 +212,16 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                                 </li>
                             <?php endforeach; ?>
                         </ul>
+                        <?php if (is_admin()): ?>
                         <div class="card-footer bg-transparent">
                             <a href="<?= base_url('inventory/stock-batches') ?>" class="small">Manage stock batches →</a>
                         </div>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </section>
 
+            <?php if (is_admin()): ?>
             <section class="mt-4">
                 <h2 class="h6 text-uppercase text-muted fw-semibold mb-3"><i class="bi bi-link-45deg me-1"></i>ERP quick links</h2>
                 <div class="row g-2">
@@ -236,6 +245,7 @@ $revenueChange = ($revenueLastMonth ?? 0) > 0 ? ((($revenueThisMonth ?? 0) - $re
                     </div>
                 </div>
             </section>
+            <?php endif; ?>
         </div>
     </div>
 </div>

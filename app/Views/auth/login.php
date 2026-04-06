@@ -1,6 +1,6 @@
 <div class="auth-card">
     <a href="<?= base_url('/') ?>">
-        <img src="<?= asset_url('assets/images/logo.png') ?>" alt="Gameshala ERP" class="auth-logo">
+        <img src="<?= asset_url('assets/images/gameshaala_howrah.png') ?>" alt="Gameshaala Howrah" class="auth-logo">
     </a>
     <h1 class="auth-title"><i class="bi bi-box-arrow-in-right me-2"></i>Sign in</h1>
 
@@ -33,6 +33,7 @@
     <?= form_close() ?>
 
     <p class="auth-footer mb-0 mt-3">
-        <a href="<?= base_url('/') ?>"><i class="bi bi-house me-1"></i>Back to home</a>
+        <a href="https://gameshaala.com" rel="noopener noreferrer"><i class="bi bi-house me-1"></i>Back to home</a>
     </p>
+    <p class="text-center text-secondary small mb-0 mt-3">&copy; <?= date('Y') ?> Gameshala ERP. Developed by <a href="https://www.linkedin.com/in/johndpknt" target="_blank" rel="noopener noreferrer" class="text-secondary text-decoration-none">John</a> &amp; <a href="https://chandranathpatra.com" target="_blank" rel="noopener noreferrer" class="text-secondary text-decoration-none">Patra</a>.</p>
 </div>

@@ -14,10 +14,10 @@ $routes->post('auth/attemptLogin', 'Auth::attemptLogin');
 $routes->get('logout', 'Auth::logout');
 
 // Catalog - Vendors
-$routes->get('catalog/vendors', 'Vendors::index');
-$routes->post('catalog/vendors', 'Vendors::add');
-$routes->post('catalog/vendors/update/(:num)', 'Vendors::update/$1');
-$routes->post('catalog/vendors/set-status/(:num)', 'Vendors::setStatus/$1');
+$routes->get('catalog/vendors', 'Vendors::index', ['filter' => 'admin']);
+$routes->post('catalog/vendors', 'Vendors::add', ['filter' => 'admin']);
+$routes->post('catalog/vendors/update/(:num)', 'Vendors::update/$1', ['filter' => 'admin']);
+$routes->post('catalog/vendors/set-status/(:num)', 'Vendors::setStatus/$1', ['filter' => 'admin']);
 
 // Catalog - Products
 $routes->get('catalog/products', 'Products::index');
@@ -35,9 +35,9 @@ $routes->post('catalog/coupons/set-status/(:num)', 'Coupons::setStatus/$1');
 $routes->get('inventory/stock-movements', 'StockMovements::index');
 
 // Inventory - Procurement Rules (create and activate/deactivate only; no edit)
-$routes->get('inventory/procurement-rules', 'ProcurementRules::index');
-$routes->post('inventory/procurement-rules', 'ProcurementRules::add');
-$routes->post('inventory/procurement-rules/set-status/(:num)', 'ProcurementRules::setStatus/$1');
+$routes->get('inventory/procurement-rules', 'ProcurementRules::index', ['filter' => 'admin']);
+$routes->post('inventory/procurement-rules', 'ProcurementRules::add', ['filter' => 'admin']);
+$routes->post('inventory/procurement-rules/set-status/(:num)', 'ProcurementRules::setStatus/$1', ['filter' => 'admin']);
 
 // Sales - Customers
 $routes->get('sales/customers', 'Customers::index');
@@ -60,20 +60,20 @@ $routes->get('sales/orders/api/product-price', 'Orders::apiProductPrice');
 $routes->post('sales/orders/api/quick-add-customer', 'Orders::apiQuickAddCustomer');
 
 // Inventory - Stock Batches (list, add page, edit)
-$routes->get('inventory/stock-batches', 'StockBatches::index');
-$routes->get('inventory/stock-batches/add', 'StockBatches::add');
-$routes->post('inventory/stock-batches/create', 'StockBatches::create');
-$routes->get('inventory/stock-batches/edit/(:num)', 'StockBatches::edit/$1');
-$routes->post('inventory/stock-batches/update/(:num)', 'StockBatches::update/$1');
+$routes->get('inventory/stock-batches', 'StockBatches::index', ['filter' => 'admin']);
+$routes->get('inventory/stock-batches/add', 'StockBatches::add', ['filter' => 'admin']);
+$routes->post('inventory/stock-batches/create', 'StockBatches::create', ['filter' => 'admin']);
+$routes->get('inventory/stock-batches/edit/(:num)', 'StockBatches::edit/$1', ['filter' => 'admin']);
+$routes->post('inventory/stock-batches/update/(:num)', 'StockBatches::update/$1', ['filter' => 'admin']);
 
-// Gaming - Categories (gaming categories and modes)
-$routes->get('gaming/categories', 'Gaming::categories');
-$routes->post('gaming/categories', 'Gaming::addCategory');
-$routes->post('gaming/categories/update/(:num)', 'Gaming::updateCategory/$1');
-$routes->post('gaming/categories/set-status/(:num)', 'Gaming::setStatusCategory/$1');
-$routes->post('gaming/modes', 'Gaming::addMode');
-$routes->post('gaming/modes/update/(:num)', 'Gaming::updateMode/$1');
-$routes->post('gaming/modes/set-status/(:num)', 'Gaming::setStatusMode/$1');
+// Gaming - Categories (gaming categories and modes) — admin only
+$routes->get('gaming/categories', 'Gaming::categories', ['filter' => 'admin']);
+$routes->post('gaming/categories', 'Gaming::addCategory', ['filter' => 'admin']);
+$routes->post('gaming/categories/update/(:num)', 'Gaming::updateCategory/$1', ['filter' => 'admin']);
+$routes->post('gaming/categories/set-status/(:num)', 'Gaming::setStatusCategory/$1', ['filter' => 'admin']);
+$routes->post('gaming/modes', 'Gaming::addMode', ['filter' => 'admin']);
+$routes->post('gaming/modes/update/(:num)', 'Gaming::updateMode/$1', ['filter' => 'admin']);
+$routes->post('gaming/modes/set-status/(:num)', 'Gaming::setStatusMode/$1', ['filter' => 'admin']);
 
 // Gaming - Price rules
 $routes->get('gaming/price-rules', 'Gaming::priceRules');
@@ -95,14 +95,14 @@ $routes->post('gaming/sessions/end/(:num)', 'Gaming::endSession/$1');
 $routes->post('gaming/sessions/generate-invoice/(:num)', 'Gaming::generateInvoice/$1');
 $routes->get('gaming/sessions/api/customer-search', 'Gaming::apiCustomerSearch');
 
-// Admin - Users
-$routes->get('admin/users', 'Admin\Users::index');
-$routes->post('admin/users', 'Admin\Users::add');
-$routes->post('admin/users/update/(:num)', 'Admin\Users::update/$1');
-$routes->post('admin/users/set-status/(:num)', 'Admin\Users::setStatus/$1');
+// Admin - Users — admin only
+$routes->get('admin/users', 'Admin\Users::index', ['filter' => 'admin']);
+$routes->post('admin/users', 'Admin\Users::add', ['filter' => 'admin']);
+$routes->post('admin/users/update/(:num)', 'Admin\Users::update/$1', ['filter' => 'admin']);
+$routes->post('admin/users/set-status/(:num)', 'Admin\Users::setStatus/$1', ['filter' => 'admin']);
 
-// Admin - Activity Log
-$routes->get('admin/activity-log', 'ActivityLog::index');
+// Admin - Activity Log — admin only
+$routes->get('admin/activity-log', 'ActivityLog::index', ['filter' => 'admin']);
 
 // API - Products (list with search, sort, filter, pagination)
 $routes->get('api/products', 'Api\Products::index');

@@ -25,12 +25,14 @@
                     <p class="card-desc">Track inventory and movements</p>
                 </a>
             </div>
+            <?php if (is_admin()): ?>
             <div class="col-12 col-sm-6 col-lg-3">
                 <a href="<?= base_url('admin/users') ?>" class="quick-link-card">
                     <span class="card-title">Users</span>
                     <p class="card-desc">Manage admin and staff users</p>
                 </a>
             </div>
+            <?php endif; ?>
         </div>
     </section>
 </div>

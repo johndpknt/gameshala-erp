@@ -36,6 +36,7 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
                     </div>
                 </div>
             </div>
+            <?php if (is_admin()): ?>
             <div class="col-6 col-lg-3">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -47,6 +48,7 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
             <div class="col-6 col-lg-3">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -144,6 +146,7 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
         </div>
 
         <div class="col-12 col-lg-4">
+            <?php if (is_admin()): ?>
             <!-- Sales summary -->
             <section class="mb-4">
                 <h2 class="h6 text-uppercase text-muted fw-semibold mb-3"><i class="bi bi-credit-card me-1"></i>Sales summary</h2>
@@ -174,6 +177,7 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
                     </div>
                 </div>
             </section>
+            <?php endif; ?>
 
             <!-- Recent orders -->
             <section class="mb-4">
@@ -214,13 +218,16 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
                                 </li>
                             <?php endforeach; ?>
                         </ul>
+                        <?php if (is_admin()): ?>
                         <div class="card-footer bg-transparent py-2">
                             <a href="<?= base_url('inventory/stock-batches') ?>" class="small">Stock batches →</a>
                         </div>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </section>
 
+            <?php if (is_admin()): ?>
             <!-- Quick links (Gaming only) -->
             <section>
                 <h2 class="h6 text-uppercase text-muted fw-semibold mb-3"><i class="bi bi-link-45deg me-1"></i>Gaming quick links</h2>
@@ -231,6 +238,7 @@ $revenueChange = $revenueLastMonth > 0 ? (($revenueThisMonth - $revenueLastMonth
                     <a href="<?= base_url('gaming/food-beverages') ?>" class="btn btn-outline-secondary"><i class="bi bi-cup-straw me-2"></i>Food &amp; beverages</a>
                 </div>
             </section>
+            <?php endif; ?>
         </div>
     </div>
 </div>

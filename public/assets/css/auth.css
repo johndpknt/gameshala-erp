@@ -23,8 +23,10 @@
 
 .auth-logo {
     display: block;
-    height: 40px;
+    max-height: 100px;
     width: auto;
+    max-width: 100%;
+    height: auto;
     margin: 0 auto 1rem;
     object-fit: contain;
 }
