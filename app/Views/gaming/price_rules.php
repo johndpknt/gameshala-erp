@@ -34,15 +34,14 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
                 <?php else: ?>
                     <?php foreach ($rules as $r): ?>
                         <?php
-                            $active = isset($r['is_active']) ? (int) $r['is_active'] : 1;
-                            $ptRaw  = trim((string) ($r['price_type'] ?? ''));
-                            $ptKey  = $ptRaw !== '' ? strtoupper($ptRaw) : '';
-                            $ptLabel = $ptKey !== '' ? ($priceTypeLabels[$ptKey] ?? $ptKey) : '—';
+                            $active     = isset($r['is_active']) ? (int) $r['is_active'] : 1;
+                            $price_type = $r['price_type'] ?? '';
+                            $ptKey      = strtoupper(trim($price_type ?? ''));
                         ?>
                         <tr>
                             <td><?= esc($r['category_name'] ?? '—') ?></td>
                             <td><?= esc($r['mode_name'] ?? '—') ?></td>
-                            <td><?= esc($ptLabel) ?></td>
+                            <td><?= esc(gaming_time_duration_label($r['price_type'] ?? '')) ?></td>
                             <td><?= esc(number_format((float) ($r['price'] ?? 0), 2)) ?></td>
                             <td>
                                 <span class="badge <?= $active ? 'bg-success' : 'bg-secondary' ?>">
