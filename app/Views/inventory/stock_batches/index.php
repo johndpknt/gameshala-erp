@@ -34,7 +34,6 @@
                     <th class="text-end"><a href="<?= $batchSortUrl('purchased_qty') ?>" class="text-dark text-decoration-none">Purchased<?= $batchArrow('purchased_qty') ?></a></th>
                     <th class="text-end"><a href="<?= $batchSortUrl('remaining_qty') ?>" class="text-dark text-decoration-none">Remaining<?= $batchArrow('remaining_qty') ?></a></th>
                     <th class="text-end"><a href="<?= $batchSortUrl('unit_cost') ?>" class="text-dark text-decoration-none">Unit cost<?= $batchArrow('unit_cost') ?></a></th>
-                    <th class="text-end"><a href="<?= $batchSortUrl('selling_price') ?>" class="text-dark text-decoration-none">Selling price<?= $batchArrow('selling_price') ?></a></th>
                     <th><a href="<?= $batchSortUrl('received_at') ?>" class="text-dark text-decoration-none">Received at<?= $batchArrow('received_at') ?></a></th>
                     <th class="text-end" style="width: 100px;">Actions</th>
                 </tr>
@@ -42,7 +41,7 @@
             <tbody>
                 <?php if (empty($batches)): ?>
                     <tr>
-                        <td colspan="10" class="text-center text-secondary py-4">No stock batches found.</td>
+                        <td colspan="9" class="text-center text-secondary py-4">No stock batches found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($batches as $b): ?>
@@ -60,10 +59,6 @@
                             <td class="text-end"><?= (int) $b['purchased_qty'] ?></td>
                             <td class="text-end"><?= (int) $b['remaining_qty'] ?></td>
                             <td class="text-end"><?= esc(number_format((float) ($b['unit_cost'] ?? 0), 2)) ?></td>
-                            <td class="text-end"><?php
-                                $sp = $b['selling_price'] ?? null;
-                                echo ($sp !== null && $sp !== '') ? esc(number_format((float) $sp, 2)) : '—';
-                            ?></td>
                             <td><?= esc(date('M j, Y', strtotime($b['received_at']))) ?></td>
                             <td class="text-end">
                                 <a href="<?= base_url('inventory/stock-batches/edit/' . (int) $b['id']) ?>" class="btn btn-sm btn-outline-primary">Edit</a>

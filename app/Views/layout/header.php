@@ -45,8 +45,8 @@
                         <ul class="dropdown-menu dropdown-menu-dark">
                             <?php if (is_admin()): ?>
                             <li><a class="dropdown-item" href="<?= base_url('gaming/categories') ?>"><i class="bi bi-tags me-2"></i>Categories</a></li>
-                            <?php endif; ?>
                             <li><a class="dropdown-item" href="<?= base_url('gaming/price-rules') ?>"><i class="bi bi-currency-rupee me-2"></i>Price Rules</a></li>
+                            <?php endif; ?>
                             <li><a class="dropdown-item" href="<?= base_url('gaming/food-beverages') ?>"><i class="bi bi-cup-straw me-2"></i>Food & Beverages</a></li>
                             <li><a class="dropdown-item" href="<?= base_url('gaming/sessions') ?>"><i class="bi bi-play-circle me-2"></i>Sessions</a></li>
                         </ul>

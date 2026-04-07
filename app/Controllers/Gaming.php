@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use App\Libraries\ProductCatalogPrice;
+use App\Models\BatchProcurementRuleModel;
 use App\Models\CustomerModel;
 use App\Models\FoodBeverageItemModel;
 use App\Models\GamingCategoryModel;
@@ -11,6 +11,9 @@ use App\Models\GamingPriceRuleModel;
 use App\Models\GamingVisitFoodItemModel;
 use App\Models\GamingVisitModel;
 use App\Models\InvoiceModel;
+use App\Models\ProductModel;
+use App\Models\ProcurementRuleModel;
+use App\Models\StockBatchModel;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
 
@@ -24,6 +27,10 @@ class Gaming extends BaseController
     protected GamingVisitFoodItemModel $visitFoodModel;
     protected CustomerModel $customerModel;
     protected InvoiceModel $invoiceModel;
+    protected ProductModel $productModel;
+    protected StockBatchModel $stockBatchModel;
+    protected BatchProcurementRuleModel $batchRuleModel;
+    protected ProcurementRuleModel $procurementRuleModel;
 
     public function __construct()
     {
@@ -35,13 +42,135 @@ class Gaming extends BaseController
         $this->visitFoodModel       = model(GamingVisitFoodItemModel::class);
         $this->customerModel        = model(CustomerModel::class);
         $this->invoiceModel         = model(InvoiceModel::class);
+        $this->productModel         = model(ProductModel::class);
+        $this->stockBatchModel      = model(StockBatchModel::class);
+        $this->batchRuleModel       = model(BatchProcurementRuleModel::class);
+        $this->procurementRuleModel = model(ProcurementRuleModel::class);
+    }
+
+    protected function gamingVisitFoodHasProductIdColumn(): bool
+    {
+        $t = $this->visitFoodModel->db->DBPrefix . $this->visitFoodModel->table;
+
+        return $this->visitFoodModel->db->fieldExists('product_id', $t);
+    }
+
+    /**
+     * Same list as gaming/food-beverages: all active items.
+     */
+    protected function allFoodBeverageItemsForSession(): array
+    {
+        return $this->foodBeverageItemModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
+    }
+
+    protected function productSkuAllowedForSessionFood(string $sku): bool
+    {
+        $u = strtoupper($sku);
+
+        return str_starts_with($u, 'BEVE-') || str_starts_with($u, 'FOOD');
+    }
+
+    protected function computeSellingPrice(float $unitCost, array $rule): float
+    {
+        $profitType  = $rule['profit_type'] ?? 'FLAT';
+        $profitValue = (float) ($rule['profit_value'] ?? 0);
+        $profitAmount = $profitType === 'PERCENTAGE'
+            ? $unitCost * ($profitValue / 100)
+            : $profitValue;
+
+        return round(max(0, $unitCost + $profitAmount), 2);
+    }
+
+    /**
+     * @return array{batch_id: int, unit_price: float}|null
+     */
+    protected function resolveCatalogProductUnitPrice(int $productId): ?array
+    {
+        $batch = $this->stockBatchModel
+            ->where('product_id', $productId)
+            ->where('remaining_qty >', 0)
+            ->orderBy('received_at', 'asc')
+            ->first();
+        if (! $batch) {
+            return null;
+        }
+        $ruleRow = $this->batchRuleModel
+            ->where('batch_id', $batch['id'])
+            ->where('is_active', 1)
+            ->orderBy('id', 'desc')
+            ->first();
+        if (! $ruleRow) {
+            return null;
+        }
+        $rule = $this->procurementRuleModel->find($ruleRow['procurement_rule_id']);
+        if (! $rule) {
+            return null;
+        }
+        $unitCost  = (float) $batch['unit_cost'];
+        $unitPrice = $this->computeSellingPrice($unitCost, $rule);
+
+        return ['batch_id' => (int) $batch['id'], 'unit_price' => $unitPrice];
+    }
+
+    /**
+     * Catalog products (active) with SKU BEVE-* or FOOD* and available price/stock.
+     *
+     * @return list<array{id: int, name: string, sku: string, unit: string, unit_price: float, batch_id: int}>
+     */
+    protected function catalogProductsForSessionFood(): array
+    {
+        $rows = $this->productModel->builder()
+            ->where('is_active', 1)
+            ->groupStart()
+                ->like('sku', 'BEVE-', 'after')
+                ->orLike('sku', 'FOOD', 'after')
+            ->groupEnd()
+            ->orderBy('name', 'asc')
+            ->get()
+            ->getResultArray();
+        $out = [];
+        foreach ($rows as $p) {
+            $sku = (string) ($p['sku'] ?? '');
+            if (! $this->productSkuAllowedForSessionFood($sku)) {
+                continue;
+            }
+            $price = $this->resolveCatalogProductUnitPrice((int) $p['id']);
+            if ($price === null) {
+                continue;
+            }
+            $out[] = [
+                'id'         => (int) $p['id'],
+                'name'       => $p['name'] ?? '',
+                'sku'        => $sku,
+                'unit'       => $p['unit'] ?? '',
+                'unit_price' => $price['unit_price'],
+                'batch_id'   => $price['batch_id'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Consol, gaming package, and price-rule management are limited to ADMIN (matches nav).
+     */
+    protected function requireAdminGaming(): ?RedirectResponse
+    {
+        if (session()->get('user_role') !== 'ADMIN') {
+            return redirect()->to('gaming/sessions')->with('error', 'That page is only available to administrators.');
+        }
+
+        return null;
     }
 
     /**
      * Categories page: gaming categories and gaming modes (add, edit, deactivate).
      */
-    public function categories(): string
+    public function categories(): string|RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         helper('form');
         $categories = $this->categoryModel->orderBy('name', 'asc')->findAll();
         $modes      = $this->modeModel->orderBy('name', 'asc')->findAll();
@@ -57,6 +186,9 @@ class Gaming extends BaseController
 
     public function addCategory(): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         if (! $this->validate(['name' => 'required|max_length[100]'])) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
@@ -68,6 +200,9 @@ class Gaming extends BaseController
 
     public function updateCategory(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $cat = $this->categoryModel->find($id);
         if (! $cat) {
             return redirect()->back()->with('error', 'Category not found.');
@@ -83,6 +218,9 @@ class Gaming extends BaseController
 
     public function setStatusCategory(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $cat = $this->categoryModel->find($id);
         if (! $cat) {
             return redirect()->back()->with('error', 'Category not found.');
@@ -97,6 +235,9 @@ class Gaming extends BaseController
 
     public function addMode(): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         if (! $this->validate(['name' => 'required|max_length[100]'])) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
@@ -108,6 +249,9 @@ class Gaming extends BaseController
 
     public function updateMode(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $mode = $this->modeModel->find($id);
         if (! $mode) {
             return redirect()->back()->with('error', 'Mode not found.');
@@ -123,6 +267,9 @@ class Gaming extends BaseController
 
     public function setStatusMode(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $mode = $this->modeModel->find($id);
         if (! $mode) {
             return redirect()->back()->with('error', 'Mode not found.');
@@ -138,46 +285,53 @@ class Gaming extends BaseController
     /**
      * Price rules page: list, add, edit, activate/deactivate.
      */
-    public function priceRules(): string
+    public function priceRules(): string|RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         helper('form');
         $categories = $this->categoryModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
         $modes      = $this->modeModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
-        $prefix     = $this->priceRuleModel->db->DBPrefix;
-        $rules      = $this->priceRuleModel->builder()
-            ->select('gaming_price_rules.*, gc.name AS category_name, gm.name AS mode_name')
-            ->join($prefix . 'gaming_categories gc', 'gc.id = gaming_price_rules.gaming_category_id', 'left')
-            ->join($prefix . 'gaming_modes gm', 'gm.id = gaming_price_rules.gaming_mode_id', 'left')
-            ->orderBy('gc.name', 'asc')
-            ->orderBy('gm.name', 'asc')
-            ->get()
-            ->getResultArray();
+        $prefix = $this->priceRuleModel->db->DBPrefix;
+        $tRules = $prefix . 'gaming_price_rules';
+        $tCat   = $prefix . 'gaming_categories';
+        $tMode  = $prefix . 'gaming_modes';
+        $sql    = "SELECT gpr.*, gc.name AS category_name, gm.name AS mode_name
+            FROM `{$tRules}` gpr
+            LEFT JOIN `{$tCat}` gc ON gc.id = gpr.gaming_category_id
+            LEFT JOIN `{$tMode}` gm ON gm.id = gpr.gaming_mode_id
+            ORDER BY gc.name ASC, gm.name ASC";
+        $rules = $this->priceRuleModel->db->query($sql)->getResultArray();
 
         return view('layout/main', [
             'pageTitle' => 'Price Rules - Gaming',
             'content'   => view('gaming/price_rules', [
-                'categories'       => $categories,
-                'modes'            => $modes,
-                'rules'            => $rules,
-                'priceTypeLabels'  => GamingPriceRuleModel::priceTypeLabels(),
+                'categories'      => $categories,
+                'modes'           => $modes,
+                'rules'           => $rules,
+                'priceTypeLabels' => GamingPriceRuleModel::priceTypeLabels(),
             ]),
         ]);
     }
 
     public function addPriceRule(): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $rules = [
             'gaming_category_id' => 'required|integer',
-            'gaming_mode_id'    => 'required|integer',
-            'price_type'        => 'required|in_list[' . GamingPriceRuleModel::priceTypeValidationList() . ']',
-            'price'             => 'required|decimal',
+            'gaming_mode_id'     => 'required|integer',
+            'price_type'         => 'required|in_list[' . GamingPriceRuleModel::priceTypeValidationList() . ']',
+            'price'              => 'required|decimal',
         ];
         if (! $this->validate($rules)) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
         $categoryId = (int) $this->request->getPost('gaming_category_id');
         $modeId     = (int) $this->request->getPost('gaming_mode_id');
-        $priceType  = $this->request->getPost('price_type');
+        $priceType  = strtoupper(trim((string) $this->request->getPost('price_type')));
         $price      = (float) $this->request->getPost('price');
         $id         = $this->priceRuleModel->insert([
             'gaming_category_id' => $categoryId,
@@ -186,12 +340,24 @@ class Gaming extends BaseController
             'price'              => $price,
             'is_active'          => 1,
         ]);
+        if ($id === false) {
+            $err = $this->priceRuleModel->errors();
+            log_message('error', 'gaming price_rule insert failed: ' . json_encode($err));
+
+            return redirect()->back()->withInput()->with(
+                'error',
+                'Could not save price type. Run `php spark migrate` (column `price_type` may need VARCHAR), or check logs.'
+            );
+        }
         $this->logActivity('gaming', 'price_rule_create', (int) $id, 'Created gaming price rule.');
         return redirect()->back()->with('message', 'Price rule added.');
     }
 
     public function updatePriceRule(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $rule = $this->priceRuleModel->find($id);
         if (! $rule) {
             return redirect()->back()->with('error', 'Price rule not found.');
@@ -205,18 +371,29 @@ class Gaming extends BaseController
         if (! $this->validate($rules)) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
-        $this->priceRuleModel->update($id, [
+        $ok = $this->priceRuleModel->update($id, [
             'gaming_category_id' => (int) $this->request->getPost('gaming_category_id'),
             'gaming_mode_id'     => (int) $this->request->getPost('gaming_mode_id'),
-            'price_type'         => $this->request->getPost('price_type'),
+            'price_type'         => strtoupper(trim((string) $this->request->getPost('price_type'))),
             'price'              => (float) $this->request->getPost('price'),
         ]);
+        if ($ok === false) {
+            log_message('error', 'gaming price_rule update failed: ' . json_encode($this->priceRuleModel->errors()));
+
+            return redirect()->back()->withInput()->with(
+                'error',
+                'Could not update price type. Run `php spark migrate` if `price_type` is still an outdated ENUM.'
+            );
+        }
         $this->logActivity('gaming', 'price_rule_update', $id, 'Updated gaming price rule.');
         return redirect()->back()->with('message', 'Price rule updated.');
     }
 
     public function setStatusPriceRule(int $id): RedirectResponse
     {
+        if ($deny = $this->requireAdminGaming()) {
+            return $deny;
+        }
         $rule = $this->priceRuleModel->find($id);
         if (! $rule) {
             return redirect()->back()->with('error', 'Price rule not found.');
@@ -334,7 +511,8 @@ class Gaming extends BaseController
             ->get()
             ->getResultArray();
 
-        $foodItems   = $this->foodBeverageItemModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
+        $foodItems        = $this->allFoodBeverageItemsForSession();
+        $catalogFoodItems = $this->catalogProductsForSessionFood();
         $priceRules  = $this->priceRuleModel->where('is_active', 1)->orderBy('id', 'asc')->findAll();
         $rulesWithNames = [];
         foreach ($priceRules as $r) {
@@ -347,13 +525,20 @@ class Gaming extends BaseController
         $visitIds    = array_merge(array_column($ongoing, 'id'), array_column($finished, 'id'));
         $foodByVisit = [];
         if (! empty($visitIds)) {
-            $rows = $this->visitFoodModel->builder()
-                ->select('gaming_visit_food_items.*, fbi.name AS fbi_name, fbi.unit_label, p.name AS product_name, COALESCE(fbi.name, p.name) AS item_name')
-                ->join($prefix . 'food_beverage_items fbi', 'fbi.id = gaming_visit_food_items.food_beverage_item_id', 'left')
-                ->join($prefix . 'products p', 'p.id = gaming_visit_food_items.product_id', 'left')
-                ->whereIn('gaming_visit_food_items.gaming_visit_id', $visitIds)
-                ->get()
-                ->getResultArray();
+            $vf = $this->visitFoodModel->builder();
+            $vf->select('gaming_visit_food_items.*, fbi.name AS fb_name, fbi.unit_label AS fb_unit_label');
+            $vf->join($prefix . 'food_beverage_items fbi', 'fbi.id = gaming_visit_food_items.food_beverage_item_id', 'left');
+            if ($this->gamingVisitFoodHasProductIdColumn()) {
+                $vf->select('gaming_visit_food_items.*, fbi.name AS fb_name, fbi.unit_label AS fb_unit_label, p.name AS product_name, p.unit AS product_unit');
+                $vf->join($prefix . 'products p', 'p.id = gaming_visit_food_items.product_id', 'left');
+            }
+            $vf->whereIn('gaming_visit_food_items.gaming_visit_id', $visitIds);
+            $rows = $vf->get()->getResultArray();
+            foreach ($rows as &$r) {
+                $r['item_name']   = $r['fb_name'] ?? $r['product_name'] ?? '';
+                $r['unit_label']  = $r['fb_unit_label'] ?? $r['product_unit'] ?? '';
+            }
+            unset($r);
             foreach ($rows as $row) {
                 $vid = $row['gaming_visit_id'];
                 if (! isset($foodByVisit[$vid])) {
@@ -367,16 +552,17 @@ class Gaming extends BaseController
         return view('layout/main', [
             'pageTitle' => 'Sessions - Gaming',
             'content'   => view('gaming/sessions', [
-                'ongoing'              => $ongoing,
-                'finished'             => $finished,
-                'finishedTotal'        => $finishedTotal,
-                'finishedPage'         => $finishedPage,
-                'finishedPerPage'      => $finishedPerPage,
-                'finishedTotalPages'   => $finishedTotalPages,
-                'foodByVisit'          => $foodByVisit,
-                'foodItems'            => $foodItems,
-                'priceRules'           => $rulesWithNames,
-                'priceTypeLabels'      => GamingPriceRuleModel::priceTypeLabels(),
+                'ongoing'            => $ongoing,
+                'finished'           => $finished,
+                'finishedTotal'      => $finishedTotal,
+                'finishedPage'       => $finishedPage,
+                'finishedPerPage'    => $finishedPerPage,
+                'finishedTotalPages' => $finishedTotalPages,
+                'foodByVisit'        => $foodByVisit,
+                'foodItems'          => $foodItems,
+                'catalogFoodItems'   => $catalogFoodItems,
+                'visitFoodHasProductId' => $this->gamingVisitFoodHasProductIdColumn(),
+                'priceRules'         => $rulesWithNames,
             ]),
         ]);
     }
@@ -394,11 +580,11 @@ class Gaming extends BaseController
         $newName  = trim((string) $this->request->getPost('new_customer_name'));
         $newPhone = trim((string) $this->request->getPost('new_customer_phone'));
         if ($newName !== '' && $newPhone !== '') {
-            $newPhone = trim($newPhone);
-            if ($this->customerModel->findOtherByPhoneComparable($newPhone, null) !== null) {
+            $dup = $this->customerModel->findByPhoneDigits($newPhone);
+            if ($dup !== null) {
                 return redirect()->back()->withInput()->with(
                     'error',
-                    'This phone number is already registered. Search and select that customer, or use a different phone.'
+                    'This phone number is already registered for ' . ($dup['name'] ?? 'another customer') . '. Search and select that customer instead.'
                 );
             }
             $customerId = $this->customerModel->insert([
@@ -443,58 +629,70 @@ class Gaming extends BaseController
     public function addFood(): RedirectResponse
     {
         $visitId   = (int) $this->request->getPost('gaming_visit_id');
+        $lineType  = trim((string) $this->request->getPost('line_type'));
         $itemId    = (int) $this->request->getPost('food_beverage_item_id');
         $productId = (int) $this->request->getPost('product_id');
-        $qtyOwn    = max(1, (int) $this->request->getPost('quantity_own'));
-        $qtyVendor = max(1, (int) $this->request->getPost('quantity_vendor'));
+        $qty       = (int) $this->request->getPost('quantity');
+        if ($qty < 1) {
+            return redirect()->back()->with('error', 'Quantity must be at least 1.');
+        }
         $visit = $this->visitModel->find($visitId);
         if (! $visit || ($visit['status'] ?? '') !== 'ONGOING') {
             return redirect()->back()->with('error', 'Session not found or not ongoing.');
         }
-        if ($itemId < 1 && $productId < 1) {
-            return redirect()->back()->with('error', 'Select an own menu item and/or a vendor catalog product.');
-        }
-        $ownItem = null;
-        if ($itemId > 0) {
-            $ownItem = $this->foodBeverageItemModel->find($itemId);
-            if (! $ownItem || ! (int) ($ownItem['is_active'] ?? 1)) {
-                return redirect()->back()->with('error', 'Own menu item not found.');
+
+        if ($lineType === 'product') {
+            if (! $this->gamingVisitFoodHasProductIdColumn()) {
+                return redirect()->back()->with('error', 'Catalog items are not available until the database is updated. Run migrations.');
             }
-        }
-        $pricedCatalog = null;
-        if ($productId > 0) {
-            $pricedCatalog = ProductCatalogPrice::make()->unitPriceAndStockForProduct($productId);
-            if (! $pricedCatalog['found']) {
-                return redirect()->back()->with('error', $pricedCatalog['message'] ?? 'Could not price catalog product.');
+            if ($productId < 1) {
+                return redirect()->back()->with('error', 'Please select a food or beverage item.');
             }
-            if ($qtyVendor > $pricedCatalog['total_stock']) {
-                return redirect()->back()->with('error', 'Quantity exceeds available stock (' . $pricedCatalog['total_stock'] . ').');
+            $product = $this->productModel->find($productId);
+            if (! $product || ! (int) ($product['is_active'] ?? 1)) {
+                return redirect()->back()->with('error', 'Product not found.');
             }
-        }
-        if ($productId > 0) {
-            $lineTotal = round($pricedCatalog['unit_price'] * $qtyVendor, 2);
+            if (! $this->productSkuAllowedForSessionFood((string) ($product['sku'] ?? ''))) {
+                return redirect()->back()->with('error', 'This product is not allowed for gaming sessions.');
+            }
+            $priceInfo = $this->resolveCatalogProductUnitPrice($productId);
+            if ($priceInfo === null) {
+                return redirect()->back()->with('error', 'No stock or pricing rule for this product.');
+            }
+            $lineTotal = round($priceInfo['unit_price'] * $qty, 2);
             $this->visitFoodModel->insert([
                 'gaming_visit_id'       => $visitId,
                 'food_beverage_item_id' => null,
-                'product_id'            => $productId,
-                'quantity'              => $qtyVendor,
-                'line_total'            => $lineTotal,
+                'product_id'              => $productId,
+                'stock_batch_id'          => $priceInfo['batch_id'],
+                'quantity'                => $qty,
+                'line_total'              => $lineTotal,
             ]);
-            $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added catalog food/beverage to session #' . $visitId);
-        }
-        if ($itemId > 0 && $ownItem !== null) {
-            $lineTotal = round((float) $ownItem['price'] * $qtyOwn, 2);
-            $this->visitFoodModel->insert([
+        } else {
+            if ($itemId < 1) {
+                return redirect()->back()->with('error', 'Please select a food or beverage item.');
+            }
+            $item = $this->foodBeverageItemModel->find($itemId);
+            if (! $item || ! (int) ($item['is_active'] ?? 1)) {
+                return redirect()->back()->with('error', 'Item not found.');
+            }
+            $lineTotal = round((float) $item['price'] * $qty, 2);
+            $row = [
                 'gaming_visit_id'       => $visitId,
                 'food_beverage_item_id' => $itemId,
-                'product_id'            => null,
-                'quantity'              => $qtyOwn,
+                'quantity'              => $qty,
                 'line_total'            => $lineTotal,
-            ]);
-            $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added food/beverage to session #' . $visitId);
+            ];
+            if ($this->gamingVisitFoodHasProductIdColumn()) {
+                $row['product_id']     = null;
+                $row['stock_batch_id'] = null;
+            }
+            $this->visitFoodModel->insert($row);
         }
-        $msg = ($productId > 0 && $itemId > 0) ? 'Both items added to session.' : 'Item added to session.';
-        return redirect()->back()->with('message', $msg);
+
+        $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added food/beverage to session #' . $visitId);
+
+        return redirect()->back()->with('message', 'Item added to session.');
     }
 
     public function endSession(int $id): RedirectResponse
@@ -510,9 +708,18 @@ class Gaming extends BaseController
         $start = strtotime($visit['start_time']);
         $end   = strtotime($endTime);
         $minutes = max(0, ($end - $start) / 60);
-        $price       = (float) $rule['price'];
-        $priceType   = (string) ($rule['price_type'] ?? 'FIXED');
-        $gamingAmount = GamingPriceRuleModel::computeGamingAmountFromDuration($minutes, $price, $priceType);
+        $price = (float) $rule['price'];
+        $priceType = $rule['price_type'] ?? 'MIN_45';
+        $gamingAmount = match ($priceType) {
+            'MIN_15' => round($price * ceil($minutes / 15), 2),
+            'MIN_25' => round($price * ceil($minutes / 25), 2),
+            'MIN_45' => round($price * ceil($minutes / 45), 2),
+            'MIN_60' => round($price * ceil($minutes / 60), 2),
+            'PER_MINUTE' => round($price * $minutes, 2),
+            'PER_30_MIN' => round($price * ceil($minutes / 30), 2),
+            'PER_HOUR'   => round($price * ($minutes / 60), 2),
+            default      => round($price, 2),
+        };
 
         $foodRows = $this->visitFoodModel->where('gaming_visit_id', $id)->findAll();
         $foodAmount = 0.00;

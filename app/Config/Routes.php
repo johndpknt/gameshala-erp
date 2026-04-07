@@ -75,11 +75,11 @@ $routes->post('gaming/modes', 'Gaming::addMode', ['filter' => 'admin']);
 $routes->post('gaming/modes/update/(:num)', 'Gaming::updateMode/$1', ['filter' => 'admin']);
 $routes->post('gaming/modes/set-status/(:num)', 'Gaming::setStatusMode/$1', ['filter' => 'admin']);
 
-// Gaming - Price rules
-$routes->get('gaming/price-rules', 'Gaming::priceRules');
-$routes->post('gaming/price-rules', 'Gaming::addPriceRule');
-$routes->post('gaming/price-rules/update/(:num)', 'Gaming::updatePriceRule/$1');
-$routes->post('gaming/price-rules/set-status/(:num)', 'Gaming::setStatusPriceRule/$1');
+// Gaming - Price rules — admin only
+$routes->get('gaming/price-rules', 'Gaming::priceRules', ['filter' => 'admin']);
+$routes->post('gaming/price-rules', 'Gaming::addPriceRule', ['filter' => 'admin']);
+$routes->post('gaming/price-rules/update/(:num)', 'Gaming::updatePriceRule/$1', ['filter' => 'admin']);
+$routes->post('gaming/price-rules/set-status/(:num)', 'Gaming::setStatusPriceRule/$1', ['filter' => 'admin']);
 
 // Gaming - Food & Beverages
 $routes->get('gaming/food-beverages', 'Gaming::foodBeverages');
