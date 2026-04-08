@@ -1,13 +1,13 @@
 <div class="container py-4 px-3 px-sm-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
-        <h1 class="h4 fw-semibold mb-0">Products</h1>
+        <h1 class="h4 fw-semibold mb-0"><?= esc($pageHeading ?? 'Products') ?></h1>
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal" id="btnAddProduct">
             Add product
         </button>
     </div>
 
     <?php
-    $productBase = base_url('catalog/products');
+    $productBase = $listBase ?? base_url('catalog/products');
     $productSortUrl = function ($col) use ($productBase, $searchQ, $sort, $order) {
         $next = ($sort === $col && $order === 'asc') ? 'desc' : 'asc';
         return $productBase . '?' . http_build_query(array_filter(['q' => $searchQ, 'sort' => $col, 'order' => $next]));
@@ -17,7 +17,7 @@
         return $order === 'asc' ? ' ↑' : ' ↓';
     };
     ?>
-    <form method="get" action="<?= base_url('catalog/products') ?>" class="mb-4">
+    <form method="get" action="<?= esc($productBase) ?>" class="mb-4">
         <div class="input-group" style="max-width: 400px;">
             <input type="search" name="q" class="form-control" placeholder="Search by name, SKU, slug, description..."
                    value="<?= esc($searchQ) ?>">

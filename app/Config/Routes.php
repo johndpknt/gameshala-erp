@@ -21,6 +21,7 @@ $routes->post('catalog/vendors/set-status/(:num)', 'Vendors::setStatus/$1', ['fi
 
 // Catalog - Products
 $routes->get('catalog/products', 'Products::index');
+$routes->get('catalog/beverage', 'Products::beverage');
 $routes->post('catalog/products', 'Products::add');
 $routes->post('catalog/products/update/(:num)', 'Products::update/$1');
 $routes->post('catalog/products/set-status/(:num)', 'Products::setStatus/$1');
