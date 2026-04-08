@@ -473,13 +473,32 @@ class Gaming extends BaseController
         }
         if ($productId > 0) {
             $lineTotal = round($pricedCatalog['unit_price'] * $qtyVendor, 2);
-            $this->visitFoodModel->insert([
+            $vendorLine = [
                 'gaming_visit_id'       => $visitId,
                 'food_beverage_item_id' => null,
                 'product_id'            => $productId,
                 'quantity'              => $qtyVendor,
                 'line_total'            => $lineTotal,
-            ]);
+            ];
+            try {
+                $this->visitFoodModel->insert($vendorLine);
+            } catch (\Throwable $e) {
+                // Backward-compatible fallback for environments where food_beverage_item_id is still NOT NULL.
+                $fallbackItemId = $this->resolveCatalogFoodItemId(
+                    $productId,
+                    (string) ($pricedCatalog['product_name'] ?? ('Product #' . $productId)),
+                    (float) $pricedCatalog['unit_price']
+                );
+                if ($fallbackItemId < 1) {
+                    return redirect()->back()->with('error', 'Could not map catalog product for session item.');
+                }
+
+                $vendorLine['food_beverage_item_id'] = $fallbackItemId;
+                $ok = $this->visitFoodModel->insert($vendorLine);
+                if ($ok === false) {
+                    return redirect()->back()->with('error', 'Could not add catalog item to session.');
+                }
+            }
             $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added catalog food/beverage to session #' . $visitId);
         }
         if ($itemId > 0 && $ownItem !== null) {
@@ -495,6 +514,28 @@ class Gaming extends BaseController
         }
         $msg = ($productId > 0 && $itemId > 0) ? 'Both items added to session.' : 'Item added to session.';
         return redirect()->back()->with('message', $msg);
+    }
+
+    /**
+     * Find or create a synthetic food item representing a vendor catalog product.
+     * Needed for deployments where gaming_visit_food_items.food_beverage_item_id is NOT NULL.
+     */
+    protected function resolveCatalogFoodItemId(int $productId, string $productName, float $unitPrice): int
+    {
+        $syntheticName = '[Catalog] ' . trim($productName) . ' (#' . $productId . ')';
+        $existing = $this->foodBeverageItemModel->where('name', $syntheticName)->first();
+        if ($existing) {
+            return (int) ($existing['id'] ?? 0);
+        }
+
+        $id = $this->foodBeverageItemModel->insert([
+            'name'       => $syntheticName,
+            'unit_label' => 'unit',
+            'price'      => $unitPrice,
+            'is_active'  => 1,
+        ]);
+
+        return $id === false ? 0 : (int) $id;
     }
 
     public function endSession(int $id): RedirectResponse
