@@ -33,11 +33,16 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
                     </tr>
                 <?php else: ?>
                     <?php foreach ($rules as $r): ?>
-                        <?php $active = isset($r['is_active']) ? (int) $r['is_active'] : 1; ?>
+                        <?php
+                            $active = isset($r['is_active']) ? (int) $r['is_active'] : 1;
+                            $price_type = $r['price_type'] ?? '';
+                            $ptKey = strtoupper(trim($price_type ?? ''));
+                            $ptLabel = $priceTypeLabels[$ptKey] ?? '—';
+                        ?>
                         <tr>
                             <td><?= esc($r['category_name'] ?? '—') ?></td>
                             <td><?= esc($r['mode_name'] ?? '—') ?></td>
-                            <td><?= esc($priceTypeLabels[$r['price_type'] ?? ''] ?? $r['price_type'] ?? '—') ?></td>
+                            <td><?= esc($ptLabel) ?></td>
                             <td><?= esc(number_format((float) ($r['price'] ?? 0), 2)) ?></td>
                             <td>
                                 <span class="badge <?= $active ? 'bg-success' : 'bg-secondary' ?>">
@@ -53,7 +58,7 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
                                                data-id="<?= (int) $r['id'] ?>"
                                                data-category-id="<?= (int) ($r['gaming_category_id'] ?? 0) ?>"
                                                data-mode-id="<?= (int) ($r['gaming_mode_id'] ?? 0) ?>"
-                                               data-price-type="<?= esc($r['price_type'] ?? '') ?>"
+                                               data-price-type="<?= esc($ptKey !== '' ? $ptKey : 'FIXED') ?>"
                                                data-price="<?= esc($r['price'] ?? '') ?>"><i class="bi bi-pencil me-2"></i>Edit</a>
                                         </li>
                                         <?php if ($active): ?>
@@ -163,7 +168,7 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
             form.action = '<?= base_url('gaming/price-rules/update/') ?>' + id;
             categorySelect.value = this.getAttribute('data-category-id') || '';
             modeSelect.value = this.getAttribute('data-mode-id') || '';
-            typeSelect.value = this.getAttribute('data-price-type') || '';
+            typeSelect.value = this.getAttribute('data-price-type') || 'FIXED';
             priceInput.value = this.getAttribute('data-price') || '';
         });
     });

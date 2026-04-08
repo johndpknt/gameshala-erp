@@ -43,7 +43,7 @@ class StockBatches extends BaseController
 
         $subSelect = "(SELECT {$pr}.name FROM {$bpr} INNER JOIN {$pr} ON {$bpr}.procurement_rule_id = {$pr}.id WHERE {$bpr}.batch_id = {$sb}.id AND {$bpr}.is_active = 1 ORDER BY {$bpr}.id DESC LIMIT 1)";
         $builder = $this->stockBatchModel->builder()
-            ->select("{$sb}.*, {$p}.name AS product_name, {$v}.name AS vendor_name, {$subSelect} AS rule_name", false)
+            ->select("{$sb}.*, {$p}.name AS product_name, {$p}.sku AS product_sku, {$v}.name AS vendor_name, {$subSelect} AS rule_name", false)
             ->join($p, "{$sb}.product_id = {$p}.id", 'left')
             ->join($v, "{$sb}.vendor_id = {$v}.id", 'left');
 
@@ -51,6 +51,7 @@ class StockBatches extends BaseController
             $builder->groupStart()
                 ->like("{$sb}.batch_code", $q)
                 ->orLike("{$p}.name", $q)
+                ->orLike("{$p}.sku", $q)
                 ->orLike("{$v}.name", $q)
                 ->groupEnd();
         }

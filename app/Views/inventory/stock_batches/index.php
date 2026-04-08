@@ -28,6 +28,7 @@
             <thead class="table-light">
                 <tr>
                     <th><a href="<?= $batchSortUrl('batch_code') ?>" class="text-dark text-decoration-none">Batch code<?= $batchArrow('batch_code') ?></a></th>
+                    <th>SKU</th>
                     <th><a href="<?= $batchSortUrl('product_name') ?>" class="text-dark text-decoration-none">Product<?= $batchArrow('product_name') ?></a></th>
                     <th><a href="<?= $batchSortUrl('vendor_name') ?>" class="text-dark text-decoration-none">Vendor<?= $batchArrow('vendor_name') ?></a></th>
                     <th>Rule</th>
@@ -42,12 +43,13 @@
             <tbody>
                 <?php if (empty($batches)): ?>
                     <tr>
-                        <td colspan="10" class="text-center text-secondary py-4">No stock batches found.</td>
+                        <td colspan="11" class="text-center text-secondary py-4">No stock batches found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($batches as $b): ?>
                         <tr>
                             <td><code class="small"><?= esc($b['batch_code']) ?></code></td>
+                            <td><code class="small"><?= esc($b['product_sku'] ?? '—') ?></code></td>
                             <td><?= esc($b['product_name'] ?? '—') ?></td>
                             <td><?= esc($b['vendor_name'] ?? '—') ?></td>
                             <td><?php
