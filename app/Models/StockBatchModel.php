@@ -19,6 +19,7 @@ class StockBatchModel extends Model
         'purchased_qty',
         'remaining_qty',
         'unit_cost',
+        'selling_price',
         'received_at',
         'remarks',
         'created_at',

@@ -9,7 +9,7 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
         <div>
             <h1 class="h4 fw-semibold mb-1"><i class="bi bi-currency-rupee me-2"></i>Price Rules</h1>
-            <p class="text-secondary small mb-0">Manage gaming price rules by gaming console and persons.</p>
+            <p class="text-secondary small mb-0">Manage gaming price rules by category and mode.</p>
         </div>
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#priceRuleModal" id="btnAddPriceRule"><i class="bi bi-plus-lg me-2"></i>Add price rule</button>
     </div>
@@ -18,8 +18,8 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
         <table class="table table-hover align-middle">
             <thead class="table-light">
                 <tr>
-                    <th>Console</th>
-                    <th>Persons</th>
+                    <th>Category</th>
+                    <th>Mode</th>
                     <th>Price type</th>
                     <th>Price (₹)</th>
                     <th>Status</th>
@@ -29,19 +29,15 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
             <tbody>
                 <?php if (empty($rules)): ?>
                     <tr>
-                        <td colspan="6" class="text-center text-secondary py-4">No price rules yet. Add a gaming console and persons first, then add a price rule.</td>
+                        <td colspan="6" class="text-center text-secondary py-4">No price rules yet. Add categories and modes first, then add a price rule.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($rules as $r): ?>
-                        <?php
-                            $active     = isset($r['is_active']) ? (int) $r['is_active'] : 1;
-                            $price_type = $r['price_type'] ?? '';
-                            $ptKey      = strtoupper(trim($price_type ?? ''));
-                        ?>
+                        <?php $active = isset($r['is_active']) ? (int) $r['is_active'] : 1; ?>
                         <tr>
                             <td><?= esc($r['category_name'] ?? '—') ?></td>
                             <td><?= esc($r['mode_name'] ?? '—') ?></td>
-                            <td><?= esc(gaming_time_duration_label($r['price_type'] ?? '')) ?></td>
+                            <td><?= esc($priceTypeLabels[$r['price_type'] ?? ''] ?? $r['price_type'] ?? '—') ?></td>
                             <td><?= esc(number_format((float) ($r['price'] ?? 0), 2)) ?></td>
                             <td>
                                 <span class="badge <?= $active ? 'bg-success' : 'bg-secondary' ?>">
@@ -57,7 +53,7 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
                                                data-id="<?= (int) $r['id'] ?>"
                                                data-category-id="<?= (int) ($r['gaming_category_id'] ?? 0) ?>"
                                                data-mode-id="<?= (int) ($r['gaming_mode_id'] ?? 0) ?>"
-                                               data-price-type="<?= esc($ptKey !== '' ? $ptKey : 'FIXED') ?>"
+                                               data-price-type="<?= esc($r['price_type'] ?? '') ?>"
                                                data-price="<?= esc($r['price'] ?? '') ?>"><i class="bi bi-pencil me-2"></i>Edit</a>
                                         </li>
                                         <?php if ($active): ?>
@@ -100,18 +96,18 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
                 <?= csrf_field() ?>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="priceRuleCategory" class="form-label">Console <span class="text-danger">*</span></label>
+                        <label for="priceRuleCategory" class="form-label">Category <span class="text-danger">*</span></label>
                         <select class="form-select" id="priceRuleCategory" name="gaming_category_id" required>
-                            <option value="">Select console</option>
+                            <option value="">Select category</option>
                             <?php foreach ($categories as $c): ?>
                                 <option value="<?= (int) $c['id'] ?>"><?= esc($c['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label for="priceRuleMode" class="form-label">Persons <span class="text-danger">*</span></label>
+                        <label for="priceRuleMode" class="form-label">Mode <span class="text-danger">*</span></label>
                         <select class="form-select" id="priceRuleMode" name="gaming_mode_id" required>
-                            <option value="">Select persons</option>
+                            <option value="">Select mode</option>
                             <?php foreach ($modes as $m): ?>
                                 <option value="<?= (int) $m['id'] ?>"><?= esc($m['name']) ?></option>
                             <?php endforeach; ?>
@@ -167,17 +163,9 @@ $priceTypeLabels = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTy
             form.action = '<?= base_url('gaming/price-rules/update/') ?>' + id;
             categorySelect.value = this.getAttribute('data-category-id') || '';
             modeSelect.value = this.getAttribute('data-mode-id') || '';
-            var pt = this.getAttribute('data-price-type') || 'FIXED';
-            typeSelect.value = pt;
+            typeSelect.value = this.getAttribute('data-price-type') || '';
             priceInput.value = this.getAttribute('data-price') || '';
         });
     });
-
-    var modalEl = document.getElementById('priceRuleModal');
-    if (modalEl) {
-        modalEl.addEventListener('shown.bs.modal', function () {
-            typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-    }
 })();
 </script>

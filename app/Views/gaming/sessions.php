@@ -1,5 +1,5 @@
 <?php
-helper(['form', 'gaming']);
+helper('form');
 $ongoing             = $ongoing ?? [];
 $finished            = $finished ?? [];
 $finishedTotal       = (int) ($finishedTotal ?? 0);
@@ -7,48 +7,10 @@ $finishedPage        = max(1, (int) ($finishedPage ?? 1));
 $finishedPerPage     = (int) ($finishedPerPage ?? 10);
 $finishedTotalPages  = max(1, (int) ($finishedTotalPages ?? 1));
 $foodByVisit         = $foodByVisit ?? [];
-$foodItems   = $foodItems ?? [];
-$catalogFoodItems = $catalogFoodItems ?? [];
-$visitFoodHasProductId = (bool) ($visitFoodHasProductId ?? false);
-$priceRules  = $priceRules ?? [];
-$sessionsBaseUrl           = base_url('gaming/sessions');
-
-$mergedFoodForJs = [];
-foreach ($foodItems as $f) {
-    $row = [
-        'line_type'  => 'fb',
-        'id'         => (int) $f['id'],
-        'name'       => $f['name'] ?? '',
-        'price'      => (float) ($f['price'] ?? 0),
-        'unit_label' => $f['unit_label'] ?? '',
-    ];
-    if (! empty($f['sku'])) {
-        $row['sku'] = (string) $f['sku'];
-    }
-    $mergedFoodForJs[] = $row;
-}
-foreach ($catalogFoodItems as $c) {
-    $mergedFoodForJs[] = [
-        'line_type'  => 'product',
-        'id'         => (int) $c['id'],
-        'name'       => $c['name'] ?? '',
-        'sku'        => $c['sku'] ?? '',
-        'price'      => (float) ($c['unit_price'] ?? 0),
-        'unit_label' => $c['unit'] ?? '',
-    ];
-}
-
-if (! function_exists('gaming_visit_duration_hms')) {
-    function gaming_visit_duration_hms(?string $start, ?string $end): string
-    {
-        if ($start === null || $end === null || $start === '' || $end === '') {
-            return '—';
-        }
-        $s = max(0, (int) strtotime($end) - (int) strtotime($start));
-
-        return sprintf('%02d:%02d:%02d', intdiv($s, 3600), intdiv($s % 3600, 60), $s % 60);
-    }
-}
+$foodItems           = $foodItems ?? [];
+$priceRules          = $priceRules ?? [];
+$priceTypeLabels     = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTypeLabels();
+$sessionsBaseUrl     = base_url('gaming/sessions');
 ?>
 <div class="container py-4 px-3 px-sm-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
@@ -123,7 +85,6 @@ if (! function_exists('gaming_visit_duration_hms')) {
                         <th>Game</th>
                         <th>Started</th>
                         <th>Ended</th>
-                        <th>Total time</th>
                         <th>Gaming</th>
                         <th>Food</th>
                         <th>Total</th>
@@ -139,7 +100,6 @@ if (! function_exists('gaming_visit_duration_hms')) {
                             <td><?= esc($v['category_name'] ?? '—') ?> / <?= esc($v['mode_name'] ?? '—') ?></td>
                             <td><?= $v['start_time'] ? date('d M H:i', strtotime($v['start_time'])) : '—' ?></td>
                             <td><?= $v['end_time'] ? date('d M H:i', strtotime($v['end_time'])) : '—' ?></td>
-                            <td class="text-nowrap font-monospace small"><?= esc(gaming_visit_duration_hms($v['start_time'] ?? null, $v['end_time'] ?? null)) ?></td>
                             <td>₹<?= number_format((float) ($v['gaming_amount'] ?? 0), 2) ?></td>
                             <td>₹<?= number_format((float) ($v['food_amount'] ?? 0), 2) ?></td>
                             <td><strong>₹<?= number_format((float) ($v['total_amount'] ?? 0), 2) ?></strong></td>
@@ -227,9 +187,13 @@ if (! function_exists('gaming_visit_duration_hms')) {
                     <div class="mb-3">
                         <label for="startPriceRule" class="form-label">Game (price rule) <span class="text-danger">*</span></label>
                         <select class="form-select" id="startPriceRule" name="gaming_price_rule_id" required>
-                            <option value="">Select consol / gaming package</option>
+                            <option value="">Select category / mode</option>
                             <?php foreach ($priceRules as $r): ?>
-                                <option value="<?= (int) $r['id'] ?>"><?= esc($r['category_name']) ?> / <?= esc($r['mode_name']) ?> (<?= esc(gaming_time_duration_label((string) ($r['price_type'] ?? ''))) ?> ₹<?= number_format((float) $r['price'], 2) ?>)</option>
+                                <?php
+                                $pt = (string) ($r['price_type'] ?? '');
+                                $ptLabel = $priceTypeLabels[$pt] ?? $pt;
+                                ?>
+                                <option value="<?= (int) $r['id'] ?>"><?= esc($r['category_name']) ?> / <?= esc($r['mode_name']) ?> (<?= esc($ptLabel) ?> ₹<?= number_format((float) $r['price'], 2) ?>)</option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -240,7 +204,7 @@ if (! function_exists('gaming_visit_duration_hms')) {
                         </div>
                         <div class="col-6">
                             <label for="startTime" class="form-label">Start time <span class="text-danger">*</span></label>
-                            <input type="datetime-local" class="form-control" id="startTime" name="start_time" required>
+                            <input type="datetime-local" class="form-control" id="startTime" name="start_time" value="<?= date('Y-m-d\TH:i') ?>" required>
                         </div>
                     </div>
                 </div>
@@ -255,7 +219,7 @@ if (! function_exists('gaming_visit_duration_hms')) {
 
 <!-- Add Food Modal -->
 <div class="modal fade" id="addFoodModal" tabindex="-1" aria-labelledby="addFoodModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title fs-6" id="addFoodModalLabel"><i class="bi bi-cup-straw me-2"></i>Add food / beverage</h2>
@@ -264,31 +228,32 @@ if (! function_exists('gaming_visit_duration_hms')) {
             <?= form_open(base_url('gaming/sessions/add-food'), ['id' => 'addFoodForm']) ?>
                 <?= csrf_field() ?>
                 <input type="hidden" name="gaming_visit_id" id="addFoodVisitId" value="">
-                <input type="hidden" name="line_type" id="addFoodLineType" value="">
                 <input type="hidden" name="food_beverage_item_id" id="addFoodItemId" value="">
                 <input type="hidden" name="product_id" id="addFoodProductId" value="">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="addFoodSearch" class="form-label">Food &amp; Beverage (Own) <span class="text-danger">*</span></label>
+                        <label for="addFoodSearch" class="form-label">Beverage &amp; Food (own)</label>
+                        <p class="text-muted small mb-2 mb-md-1">In-house menu from Gaming → Food &amp; beverages.</p>
                         <input type="text" class="form-control" id="addFoodSearch" placeholder="Search by name..." autocomplete="off">
                         <div id="addFoodResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
                         <div id="addFoodSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
-                        <div id="addFoodItemError" class="mt-2 text-danger small" style="display: none;"></div>
                     </div>
                     <div class="mb-3">
-                        <label for="addFoodQty" class="form-label">Quantity <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="addFoodQty" name="quantity" value="1" min="1" required>
+                        <label for="addFoodQtyOwn" class="form-label">Quantity (own)</label>
+                        <input type="number" class="form-control" id="addFoodQtyOwn" name="quantity_own" value="1" min="1">
                     </div>
-                    <div class="mb-3">
-                        <label for="addFoodCatalogSearch" class="form-label">Food &amp; Beverage</label>
-                        <input type="text" class="form-control" id="addFoodCatalogSearch" placeholder="Search by SKU (BEVE-/FOOD) or name..." autocomplete="off">
-                        <div id="addFoodCatalogResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
-                        <div id="addFoodCatalogSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
+                    <div class="mb-2 pt-2 border-top">
+                        <label for="addVendorProductSearch" class="form-label">Beverage &amp; Food (from vendor)</label>
+                        <p class="text-muted small mb-2 mb-md-1">Catalog <code class="small">FOOD-</code> / <code class="small">BEVE-</code> products (same as <code class="small">api/products?per_page=beve&amp;food=</code>). Stock and price are enforced when you add.</p>
+                        <input type="text" class="form-control" id="addVendorProductSearch" placeholder="Search by name or SKU..." autocomplete="off" maxlength="120">
+                        <div id="addVendorProductResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
+                        <div id="addVendorProductSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
                     </div>
-                    <div class="mb-3">
-                        <label for="addFoodCatelogQty" class="form-label">Quantity <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="addFoodCatelogQty" name="quantity" value="1" min="1" required>
+                    <div class="mb-2">
+                        <label for="addFoodQtyVendor" class="form-label">Quantity (from vendor)</label>
+                        <input type="number" class="form-control" id="addFoodQtyVendor" name="quantity_vendor" value="1" min="1">
                     </div>
+                    <div id="addFoodItemError" class="text-danger small" style="display: none;"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -302,8 +267,7 @@ if (! function_exists('gaming_visit_duration_hms')) {
 <script>
 (function () {
     var baseUrl = '<?= base_url() ?>';
-    var csrfName = '<?= csrf_token() ?>';
-    var csrfVal = '<?= csrf_hash() ?>';
+    var apiRoot = baseUrl.replace(/\/?$/, '/');
 
     function formatDuration(seconds) {
         if (seconds < 0) return '—';
@@ -329,66 +293,9 @@ if (! function_exists('gaming_visit_duration_hms')) {
     updateSessionTimers();
     setInterval(updateSessionTimers, 1000);
 
-    function localDatetimeLocalValue() {
-        var d = new Date();
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-        return d.toISOString().slice(0, 16);
-    }
-    var foodItemsData = <?= json_encode($mergedFoodForJs) ?>;
-
-    var catalogLoadedOnce = false;
-    function loadCatalogProductsFromApiOnce() {
-        if (catalogLoadedOnce) return;
-        var inputEl = document.getElementById('addFoodCatalogSearch');
-        if (!inputEl) return;
-        catalogLoadedOnce = true;
-
-        var url = baseUrl + 'api/products?per_page=all';
-        fetch(url)
-            .then(function (r) { return r.json(); })
-            .then(function (payload) {
-                var data = payload && payload.data ? payload.data : [];
-
-                var existingIds = {};
-                (foodItemsData || []).forEach(function (f) {
-                    if (f && f.line_type === 'product') existingIds[(f.id || 0)] = true;
-                });
-
-                var mapped = [];
-                data.forEach(function (p) {
-                    var sku = (p && p.sku) ? String(p.sku) : '';
-                    var up = sku.toUpperCase();
-                    if (!(up.startsWith('BEVE-') || up.startsWith('FOOD'))) return;
-
-                    if (p.is_active !== undefined && p.is_active !== null) {
-                        if (String(p.is_active) !== '1' && String(p.is_active) !== 'true') return;
-                    }
-
-                    var id = parseInt(p.id || 0, 10);
-                    if (!id || existingIds[id]) return;
-
-                    var selling = p.selling_price !== undefined && p.selling_price !== null ? Number(p.selling_price) : null;
-                    var list = p.list_price !== undefined && p.list_price !== null ? Number(p.list_price) : null;
-                    var price = selling !== null ? selling : (list !== null ? list : 0);
-
-                    mapped.push({
-                        line_type: 'product',
-                        id: id,
-                        name: p.name || '',
-                        sku: sku,
-                        price: price,
-                        unit_label: p.unit || ''
-                    });
-                });
-
-                foodItemsData = (foodItemsData || []).concat(mapped);
-
-                inputEl.dispatchEvent(new Event('input'));
-            })
-            .catch(function () {
-                catalogLoadedOnce = false;
-            });
-    }
+    var foodItemsData = <?= json_encode(array_map(function ($f) {
+        return ['id' => (int) $f['id'], 'name' => $f['name'] ?? '', 'price' => (float) ($f['price'] ?? 0), 'unit_label' => $f['unit_label'] ?? ''];
+    }, $foodItems)) ?>;
     var startSessionModal = document.getElementById('startSessionModal');
     var startSessionForm = document.getElementById('startSessionForm');
     var customerIdEl = document.getElementById('customerId');
@@ -405,12 +312,6 @@ if (! function_exists('gaming_visit_duration_hms')) {
         customerError.style.display = 'none';
         customerResults.style.display = 'none';
         customerResults.innerHTML = '';
-    }
-    function showCustomerError(msg) {
-        customerIdEl.value = '';
-        customerDisplay.style.display = 'none';
-        customerError.textContent = msg;
-        customerError.style.display = 'block';
     }
     function clearCustomerMsg() {
         customerDisplay.style.display = 'none';
@@ -432,14 +333,11 @@ if (! function_exists('gaming_visit_duration_hms')) {
         if (toggleText) toggleText.textContent = '+ New customer? Add name & phone';
         if (startSessionForm) startSessionForm.reset();
         document.getElementById('noOfPlayers').value = '1';
-        var st = document.getElementById('startTime');
-        if (st) st.value = localDatetimeLocalValue();
+        document.getElementById('startTime').value = '<?= date('Y-m-d\TH:i') ?>';
     }
 
     if (startSessionModal) {
-        startSessionModal.addEventListener('show.bs.modal', function () {
-            resetStartSessionForm();
-        });
+        startSessionModal.addEventListener('show.bs.modal', function () { resetStartSessionForm(); });
     }
 
     var toggleBtn = document.getElementById('toggleNewCustomer');
@@ -504,57 +402,52 @@ if (! function_exists('gaming_visit_duration_hms')) {
         });
     }
 
+    var addFoodModal = document.getElementById('addFoodModal');
+    var addFoodForm = document.getElementById('addFoodForm');
+    var addFoodSearch = document.getElementById('addFoodSearch');
+    var addFoodItemId = document.getElementById('addFoodItemId');
+    var addFoodProductId = document.getElementById('addFoodProductId');
+    var addFoodResults = document.getElementById('addFoodResults');
+    var addFoodSelected = document.getElementById('addFoodSelected');
+    var addVendorProductSearch = document.getElementById('addVendorProductSearch');
+    var addVendorProductResults = document.getElementById('addVendorProductResults');
+    var addVendorProductSelected = document.getElementById('addVendorProductSelected');
+    var addFoodItemError = document.getElementById('addFoodItemError');
+    var vendorSearchTimeout = null;
+
+    function clearOwnFoodSelection() {
+        if (addFoodItemId) addFoodItemId.value = '';
+        if (addFoodSelected) addFoodSelected.style.display = 'none';
+    }
+    function clearVendorFoodSelection() {
+        if (addFoodProductId) addFoodProductId.value = '';
+        if (addVendorProductSelected) addVendorProductSelected.style.display = 'none';
+    }
+    function resetAddFoodModalFields() {
+        if (addFoodSearch) addFoodSearch.value = '';
+        if (addVendorProductSearch) addVendorProductSearch.value = '';
+        if (addFoodItemId) addFoodItemId.value = '';
+        if (addFoodProductId) addFoodProductId.value = '';
+        if (addFoodResults) { addFoodResults.innerHTML = ''; addFoodResults.style.display = 'none'; }
+        if (addVendorProductResults) { addVendorProductResults.innerHTML = ''; addVendorProductResults.style.display = 'none'; }
+        if (addFoodSelected) addFoodSelected.style.display = 'none';
+        if (addVendorProductSelected) addVendorProductSelected.style.display = 'none';
+        if (addFoodItemError) addFoodItemError.style.display = 'none';
+        var qo = document.getElementById('addFoodQtyOwn');
+        var qv = document.getElementById('addFoodQtyVendor');
+        if (qo) qo.value = '1';
+        if (qv) qv.value = '1';
+    }
+
     document.querySelectorAll('.add-food-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var visitId = this.getAttribute('data-visit-id');
             document.getElementById('addFoodVisitId').value = visitId;
             document.getElementById('addFoodModalLabel').textContent = 'Add food / beverage — Session #' + visitId;
-            var searchEl = document.getElementById('addFoodSearch');
-            var catalogSearchEl = document.getElementById('addFoodCatalogSearch');
-            var idEl = document.getElementById('addFoodItemId');
-            var resultsEl = document.getElementById('addFoodResults');
-            var selectedEl = document.getElementById('addFoodSelected');
-            var catalogResultsEl = document.getElementById('addFoodCatalogResults');
-            var catalogSelectedEl = document.getElementById('addFoodCatalogSelected');
-            var errEl = document.getElementById('addFoodItemError');
-            if (searchEl) searchEl.value = '';
-            if (catalogSearchEl) catalogSearchEl.value = '';
-            if (idEl) idEl.value = '';
-            var lineTypeEl = document.getElementById('addFoodLineType');
-            var prodIdEl = document.getElementById('addFoodProductId');
-            if (lineTypeEl) lineTypeEl.value = '';
-            if (prodIdEl) prodIdEl.value = '';
-            if (resultsEl) { resultsEl.innerHTML = ''; resultsEl.style.display = 'none'; }
-            if (selectedEl) selectedEl.style.display = 'none';
-            if (catalogResultsEl) { catalogResultsEl.innerHTML = ''; catalogResultsEl.style.display = 'none'; }
-            if (catalogSelectedEl) catalogSelectedEl.style.display = 'none';
-            if (errEl) { errEl.style.display = 'none'; }
-            var ownQtyEl = document.getElementById('addFoodQty');
-            var catQtyEl = document.getElementById('addFoodCatelogQty');
-            if (ownQtyEl) {
-                ownQtyEl.value = '1';
-                ownQtyEl.disabled = false;
-            }
-            if (catQtyEl) {
-                catQtyEl.value = '1';
-                catQtyEl.disabled = true; // enabled only for catalog selections
-            }
-            new bootstrap.Modal(document.getElementById('addFoodModal')).show();
-            loadCatalogProductsFromApiOnce();
+            resetAddFoodModalFields();
+            new bootstrap.Modal(addFoodModal).show();
         });
     });
-
-    var addFoodSearch = document.getElementById('addFoodSearch');
-    var addFoodItemId = document.getElementById('addFoodItemId');
-    var addFoodProductId = document.getElementById('addFoodProductId');
-    var addFoodLineType = document.getElementById('addFoodLineType');
-    var addFoodResults = document.getElementById('addFoodResults');
-    var addFoodSelected = document.getElementById('addFoodSelected');
-    var addFoodCatalogSearch = document.getElementById('addFoodCatalogSearch');
-    var addFoodCatalogResults = document.getElementById('addFoodCatalogResults');
-    var addFoodCatalogSelected = document.getElementById('addFoodCatalogSelected');
-    var addFoodItemError = document.getElementById('addFoodItemError');
-    var addFoodForm = document.getElementById('addFoodForm');
 
     if (addFoodSearch && addFoodResults) {
         function renderFoodResults(matches) {
@@ -562,34 +455,24 @@ if (! function_exists('gaming_visit_duration_hms')) {
             if (matches.length === 0) {
                 var empty = document.createElement('div');
                 empty.className = 'list-group-item text-muted small';
-                empty.textContent = 'No Food & Beverage matches.';
+                empty.textContent = 'No items match.';
                 addFoodResults.appendChild(empty);
             } else {
                 matches.forEach(function (f) {
-                    var skuPart = f.sku ? (' [' + f.sku + ']') : '';
-                    var src = (f.line_type === 'product') ? '[Catalog] ' : '';
-                    var label = src + f.name + skuPart + ' — ₹' + (Number(f.price).toFixed(2)) + (f.unit_label ? ' / ' + f.unit_label : '');
+                    var label = f.name + ' — ₹' + (f.price.toFixed(2)) + (f.unit_label ? ' / ' + f.unit_label : '');
                     var a = document.createElement('a');
                     a.href = '#';
                     a.className = 'list-group-item list-group-item-action';
                     a.textContent = label;
                     a.addEventListener('click', function (e) {
                         e.preventDefault();
-                        addFoodLineType.value = 'fb';
                         addFoodItemId.value = f.id;
-                        addFoodProductId.value = '';
-                        var ownQtyEl = document.getElementById('addFoodQty');
-                        var catQtyEl = document.getElementById('addFoodCatelogQty');
-                        if (ownQtyEl) ownQtyEl.disabled = false;
-                        if (catQtyEl) catQtyEl.disabled = true;
                         addFoodSelected.textContent = 'Selected: ' + label;
                         addFoodSelected.style.display = 'block';
-                        if (addFoodCatalogSelected) addFoodCatalogSelected.style.display = 'none';
-                        addFoodCatalogSearch && (addFoodCatalogSearch.value = '');
                         addFoodSearch.value = f.name;
                         addFoodResults.style.display = 'none';
                         addFoodResults.innerHTML = '';
-                        addFoodItemError.style.display = 'none';
+                        if (addFoodItemError) addFoodItemError.style.display = 'none';
                     });
                     addFoodResults.appendChild(a);
                 });
@@ -597,26 +480,18 @@ if (! function_exists('gaming_visit_duration_hms')) {
             addFoodResults.style.display = 'block';
         }
         function refreshFoodResults() {
-            if (addFoodItemId.value) return;
-            addFoodSelected.style.display = 'none';
-            addFoodItemError.style.display = 'none';
+            if (addFoodItemError) addFoodItemError.style.display = 'none';
             var q = (addFoodSearch.value || '').trim().toLowerCase();
-            var fbItems = foodItemsData.filter(function (f) { return f.line_type === 'fb'; });
             var matches = q.length < 1
-                ? fbItems
-                : fbItems.filter(function (f) {
-                    var blob = ((f.name || '') + ' ' + (f.unit_label || '') + ' ' + (f.sku || '')).toLowerCase();
-                    return blob.indexOf(q) !== -1;
-                });
+                ? foodItemsData.slice()
+                : foodItemsData.filter(function (f) { return (f.name || '').toLowerCase().indexOf(q) !== -1; });
             renderFoodResults(matches);
         }
         addFoodSearch.addEventListener('input', function () {
-            addFoodItemId.value = '';
-            addFoodSelected.style.display = 'none';
+            clearOwnFoodSelection();
             refreshFoodResults();
         });
         addFoodSearch.addEventListener('focus', function () {
-            if (addFoodItemId.value) return;
             refreshFoodResults();
         });
         addFoodSearch.addEventListener('blur', function () {
@@ -624,85 +499,107 @@ if (! function_exists('gaming_visit_duration_hms')) {
         });
     }
 
-    if (addFoodCatalogSearch && addFoodCatalogResults) {
-        function renderCatalogResults(matches) {
-            addFoodCatalogResults.innerHTML = '';
-            if (matches.length === 0) {
+    if (addVendorProductSearch && addVendorProductResults) {
+        function fetchVendorProducts(q) {
+            var params = new URLSearchParams();
+            params.set('per_page', 'beve');
+            params.set('food', '');
+            params.set('is_active', '1');
+            if ((q || '').trim() !== '') {
+                params.set('q', (q || '').trim());
+            }
+            return fetch(apiRoot + 'api/products?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) {
+                if (!r.ok) {
+                    return Promise.reject(new Error('HTTP ' + r.status));
+                }
+                return r.json();
+            });
+        }
+        function renderVendorResults(products) {
+            addVendorProductResults.innerHTML = '';
+            if (!products || products.length === 0) {
                 var empty = document.createElement('div');
                 empty.className = 'list-group-item text-muted small';
-                empty.textContent = 'No Food & Beverage (catalog) matches.';
-                addFoodCatalogResults.appendChild(empty);
+                empty.textContent = 'No matching FOOD-/BEVE- items. (Stock is checked when you add.)';
+                addVendorProductResults.appendChild(empty);
             } else {
-                matches.forEach(function (f) {
-                    var skuPart = f.sku ? (' [' + f.sku + ']') : '';
-                    var label = '[Catalog] ' + f.name + skuPart + ' — ₹' + (Number(f.price).toFixed(2)) + (f.unit_label ? ' / ' + f.unit_label : '');
+                products.forEach(function (p) {
+                    var price = p.selling_price;
+                    var priceLabel = price !== null && price !== undefined && !isNaN(Number(price))
+                        ? '₹' + Number(price).toFixed(2)
+                        : 'No price';
+                    var label = (p.name || '') + ' — ' + (p.sku || '') + ' — ' + priceLabel + (p.unit ? ' / ' + p.unit : '');
                     var a = document.createElement('a');
                     a.href = '#';
-                    a.className = 'list-group-item list-group-item-action';
+                    a.className = 'list-group-item list-group-item-action' + (price === null || price === undefined ? ' text-muted' : '');
                     a.textContent = label;
                     a.addEventListener('click', function (e) {
                         e.preventDefault();
-                        addFoodLineType.value = 'product';
-                        addFoodProductId.value = f.id;
-                        addFoodItemId.value = '';
-                        var ownQtyEl = document.getElementById('addFoodQty');
-                        var catQtyEl = document.getElementById('addFoodCatelogQty');
-                        if (ownQtyEl) ownQtyEl.disabled = true;
-                        if (catQtyEl) catQtyEl.disabled = false;
-                        addFoodCatalogSelected.textContent = 'Selected: ' + label;
-                        addFoodCatalogSelected.style.display = 'block';
-                        if (addFoodSelected) addFoodSelected.style.display = 'none';
-                        addFoodSearch && (addFoodSearch.value = '');
-                        addFoodCatalogSearch.value = f.name;
-                        addFoodCatalogResults.style.display = 'none';
-                        addFoodCatalogResults.innerHTML = '';
-                        addFoodItemError.style.display = 'none';
+                        if (price === null || price === undefined || isNaN(Number(price))) {
+                            if (addFoodItemError) {
+                                addFoodItemError.textContent = 'This product has no selling price. Set batch selling price or procurement rule.';
+                                addFoodItemError.style.display = 'block';
+                            }
+                            return;
+                        }
+                        addFoodProductId.value = String(p.id);
+                        addVendorProductSelected.textContent = 'Selected (vendor): ' + label;
+                        addVendorProductSelected.style.display = 'block';
+                        addVendorProductSearch.value = p.name || '';
+                        addVendorProductResults.style.display = 'none';
+                        addVendorProductResults.innerHTML = '';
+                        if (addFoodItemError) addFoodItemError.style.display = 'none';
                     });
-                    addFoodCatalogResults.appendChild(a);
+                    addVendorProductResults.appendChild(a);
                 });
             }
-            addFoodCatalogResults.style.display = 'block';
+            addVendorProductResults.style.display = 'block';
         }
-
-        function refreshCatalogResults() {
-            if (addFoodProductId.value) return;
-            if (addFoodCatalogSelected) addFoodCatalogSelected.style.display = 'none';
-            addFoodItemError.style.display = 'none';
-            var q = (addFoodCatalogSearch.value || '').trim().toLowerCase();
-            var productItems = foodItemsData.filter(function (f) { return f.line_type === 'product'; });
-            var matches = q.length < 1
-                ? productItems
-                : productItems.filter(function (f) {
-                    var blob = ((f.name || '') + ' ' + (f.unit_label || '') + ' ' + (f.sku || '')).toLowerCase();
-                    return blob.indexOf(q) !== -1;
-                });
-            renderCatalogResults(matches);
+        function runVendorSearch() {
+            var q = (addVendorProductSearch.value || '').trim();
+            if (q.length > 0 && q.length < 2) {
+                addVendorProductResults.innerHTML = '';
+                addVendorProductResults.style.display = 'none';
+                return;
+            }
+            fetchVendorProducts(q).then(function (data) {
+                var list = (data && data.data) ? data.data : [];
+                renderVendorResults(list);
+            }).catch(function () {
+                addVendorProductResults.innerHTML = '';
+                var err = document.createElement('div');
+                err.className = 'list-group-item text-danger small';
+                err.textContent = 'Could not load catalog. Refresh the page or check you are logged in.';
+                addVendorProductResults.appendChild(err);
+                addVendorProductResults.style.display = 'block';
+            });
         }
-
-        addFoodCatalogSearch.addEventListener('input', function () {
-            addFoodProductId.value = '';
-            if (addFoodCatalogSelected) addFoodCatalogSelected.style.display = 'none';
-            refreshCatalogResults();
+        addVendorProductSearch.addEventListener('input', function () {
+            clearVendorFoodSelection();
+            clearTimeout(vendorSearchTimeout);
+            vendorSearchTimeout = setTimeout(runVendorSearch, 300);
         });
-
-        addFoodCatalogSearch.addEventListener('focus', function () {
-            if (addFoodProductId.value) return;
-            refreshCatalogResults();
+        addVendorProductSearch.addEventListener('focus', function () {
+            runVendorSearch();
         });
-
-        addFoodCatalogSearch.addEventListener('blur', function () {
-            setTimeout(function () { addFoodCatalogResults.style.display = 'none'; }, 200);
+        addVendorProductSearch.addEventListener('blur', function () {
+            setTimeout(function () { addVendorProductResults.style.display = 'none'; }, 200);
         });
     }
 
     if (addFoodForm) {
         addFoodForm.addEventListener('submit', function (e) {
-            var hasOwn = addFoodItemId && addFoodItemId.value;
-            var hasCatalog = addFoodProductId && addFoodProductId.value;
-            if (!hasOwn && !hasCatalog) {
+            var hasOwn = addFoodItemId && addFoodItemId.value && addFoodItemId.value !== '';
+            var hasVendor = addFoodProductId && addFoodProductId.value && addFoodProductId.value !== '';
+            if (!hasOwn && !hasVendor) {
                 e.preventDefault();
-                addFoodItemError.textContent = 'Please search and select a Food & Beverage item.';
-                addFoodItemError.style.display = 'block';
+                if (addFoodItemError) {
+                    addFoodItemError.textContent = 'Select at least one: own menu item and/or vendor catalog product.';
+                    addFoodItemError.style.display = 'block';
+                }
                 return false;
             }
         });

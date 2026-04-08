@@ -5,12 +5,12 @@ $modes      = $modes ?? [];
 ?>
 <div class="container py-4 px-3 px-sm-4">
     <h1 class="h4 fw-semibold mb-2"><i class="bi bi-tags me-2"></i>Categories</h1>
-    <p class="text-secondary mb-4">Manage gaming console and number of persons.</p>
+    <p class="text-secondary mb-4">Manage gaming categories and gaming modes.</p>
 
-    <!-- Gaming console -->
+    <!-- Gaming Categories -->
     <section class="mb-5">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
-            <h2 class="h5 fw-semibold mb-0">Gaming console</h2>
+            <h2 class="h5 fw-semibold mb-0">Gaming Categories</h2>
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#categoryModal" id="btnAddCategory"><i class="bi bi-plus-lg me-1"></i>Add category</button>
         </div>
         <div class="table-responsive">
@@ -72,10 +72,10 @@ $modes      = $modes ?? [];
         </div>
     </section>
 
-    <!-- Number of persons -->
+    <!-- Gaming Modes -->
     <section>
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
-            <h2 class="h5 fw-semibold mb-0">Number of persons</h2>
+            <h2 class="h5 fw-semibold mb-0">Gaming Modes</h2>
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modeModal" id="btnAddMode"><i class="bi bi-plus-lg me-1"></i>Add mode</button>
         </div>
         <div class="table-responsive">

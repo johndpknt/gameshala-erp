@@ -102,7 +102,7 @@ class Orders extends BaseController
     public function store(): RedirectResponse
     {
         $customerId = $this->request->getPost('customer_id');
-        $couponCode = $this->request->getPost('coupon_code');
+        $couponCode = trim((string) $this->request->getPost('coupon_code'));
         $items      = $this->request->getPost('items'); // array of [product_id, batch_id, qty, unit_price, unit_cost_snapshot]
 
         if (empty($customerId) || empty($items) || ! is_array($items)) {
@@ -135,6 +135,7 @@ class Orders extends BaseController
             }
             $lineTotal = round($unitPrice * $qty, 2);
             $subtotal += $lineTotal;
+            $lineProductDiscount = ($listingPrice > $unitPrice) ? round(($listingPrice - $unitPrice) * $qty, 2) : 0.0;
             $validItems[] = [
                 'product_id'             => $productId,
                 'stock_batch_id'         => $batchId,
@@ -142,7 +143,7 @@ class Orders extends BaseController
                 'unit_price'             => $unitPrice,
                 'listing_price_snapshot' => $listingPrice,
                 'unit_cost_snapshot'    => $unitCost,
-                'discount_amount'        => 0,
+                'discount_amount'        => $lineProductDiscount,
                 'line_total'             => $lineTotal,
             ];
         }
@@ -151,8 +152,10 @@ class Orders extends BaseController
             return redirect()->back()->withInput()->with('error', 'Add at least one product with valid quantity.');
         }
 
-        if ($couponCode !== null && $couponCode !== '') {
-            $coupon = $this->couponModel->where('code', $couponCode)->first();
+        $subtotal = round($subtotal, 2);
+
+        if ($couponCode !== '') {
+            $coupon = $this->couponModel->findByCode($couponCode);
             $couponResult = $this->validateCouponForSubtotal($coupon, $subtotal);
             if ($couponResult['valid']) {
                 $couponId       = (int) $coupon['id'];
@@ -312,7 +315,7 @@ class Orders extends BaseController
         if ($phone === null || $phone === '') {
             return $this->response->setStatusCode(400)->setJSON(['found' => false]);
         }
-        $customer = $this->customerModel->where('phone', $phone)->where('is_active', 1)->first();
+        $customer = $this->customerModel->findActiveByPhoneComparable($phone);
         if (! $customer) {
             return $this->response->setJSON(['found' => false]);
         }
@@ -320,16 +323,17 @@ class Orders extends BaseController
     }
 
     /**
-     * API: Validate coupon. POST code= & subtotal=
+     * API: Validate coupon. GET or POST: code=, subtotal=
+     * (GET avoids CSRF token staleness after other POSTs on the same page.)
      */
     public function apiValidateCoupon(): ResponseInterface
     {
-        $code     = $this->request->getPost('code');
-        $subtotal = (float) $this->request->getPost('subtotal');
-        if ($code === null || $code === '') {
+        $code = trim((string) ($this->request->getGet('code') ?? $this->request->getPost('code') ?? ''));
+        $subtotal = round((float) ($this->request->getGet('subtotal') ?? $this->request->getPost('subtotal') ?? 0), 2);
+        if ($code === '') {
             return $this->response->setJSON(['valid' => false, 'message' => 'Coupon code is required.']);
         }
-        $coupon = $this->couponModel->where('code', $code)->first();
+        $coupon = $this->couponModel->findByCode($code);
         $result = $this->validateCouponForSubtotal($coupon, $subtotal);
         if ($result['valid'] && $coupon) {
             $result['code'] = $coupon['code'] ?? '';
@@ -339,7 +343,7 @@ class Orders extends BaseController
 
     /**
      * API: Get selling price (and batch + rule details) for a product. GET ?product_id=
-     * Returns first batch with remaining_qty > 0 and active procurement rule (FIFO by received_at).
+     * FIFO batch with remaining_qty > 0. BEVE-/FOOD-* SKUs use batch selling_price when set; else procurement rule.
      */
     public function apiProductPrice(): ResponseInterface
     {
@@ -361,6 +365,31 @@ class Orders extends BaseController
             return $this->response->setJSON(['found' => false, 'message' => 'No stock available.']);
         }
 
+        $unitCost = (float) $batch['unit_cost'];
+        $sku      = (string) ($product['sku'] ?? '');
+
+        if (ProductModel::skuIsFoodOrBeverage($sku)) {
+            $rawSp = $batch['selling_price'] ?? null;
+            if ($rawSp !== null && $rawSp !== '') {
+                $unitPrice    = round((float) $rawSp, 2);
+                $listingPrice = $unitPrice;
+
+                return $this->response->setJSON([
+                    'found'         => true,
+                    'product_id'    => $productId,
+                    'product_name'  => $product['name'] ?? '',
+                    'batch_id'      => (int) $batch['id'],
+                    'batch_code'    => $batch['batch_code'] ?? '',
+                    'unit_cost'     => $unitCost,
+                    'unit_price'    => $unitPrice,
+                    'listing_price' => $listingPrice,
+                    'remaining_qty' => (int) $batch['remaining_qty'],
+                    'rule_name'     => 'Batch selling price',
+                    'rule_id'       => 0,
+                ]);
+            }
+        }
+
         $ruleRow = $this->batchRuleModel
             ->where('batch_id', $batch['id'])
             ->where('is_active', 1)
@@ -375,8 +404,7 @@ class Orders extends BaseController
             return $this->response->setJSON(['found' => false]);
         }
 
-        $unitCost    = (float) $batch['unit_cost'];
-        $unitPrice   = $this->computeSellingPrice($unitCost, $rule);
+        $unitPrice    = $this->computeSellingPrice($unitCost, $rule);
         $listingPrice = $this->computeListingPrice($unitPrice, $rule);
 
         return $this->response->setJSON([
@@ -415,11 +443,13 @@ class Orders extends BaseController
         if (! $this->validate($rules)) {
             return $this->response->setJSON(['success' => false, 'errors' => $this->validator->getErrors()]);
         }
-        $phone = (string) $this->request->getPost('phone');
-        if ($this->customerModel->findByPhoneDigits($phone)) {
-            return $this->response->setJSON(['success' => false, 'message' => 'A customer with this phone number already exists.']);
+        $phone = trim((string) $this->request->getPost('phone'));
+        if ($this->customerModel->findOtherByPhoneComparable($phone, null) !== null) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'A customer with this phone number already exists. Look them up by phone instead.',
+            ]);
         }
-
         $data = [
             'customer_type' => $this->request->getPost('customer_type'),
             'name'          => $this->request->getPost('name'),
@@ -486,6 +516,7 @@ class Orders extends BaseController
      */
     protected function validateCouponForSubtotal(?array $coupon, float $subtotal): array
     {
+        $subtotal = round($subtotal, 2);
         if (! $coupon || ! (int) ($coupon['is_active'] ?? 0)) {
             return ['valid' => false, 'discount_amount' => 0.0, 'message' => 'Invalid or inactive coupon.'];
         }
@@ -496,12 +527,16 @@ class Orders extends BaseController
         if (($coupon['valid_to'] ?? '') < $now) {
             return ['valid' => false, 'discount_amount' => 0.0, 'message' => 'Coupon has expired.'];
         }
-        $usageLimit = isset($coupon['usage_limit']) ? (int) $coupon['usage_limit'] : null;
-        $usedCount  = (int) ($coupon['used_count'] ?? 0);
-        if ($usageLimit !== null && $usedCount >= $usageLimit) {
+        $usageLimit = isset($coupon['usage_limit']) && $coupon['usage_limit'] !== '' && $coupon['usage_limit'] !== null
+            ? (int) $coupon['usage_limit']
+            : null;
+        $usedCount = (int) ($coupon['used_count'] ?? 0);
+        if ($usageLimit !== null && $usageLimit > 0 && $usedCount >= $usageLimit) {
             return ['valid' => false, 'discount_amount' => 0.0, 'message' => 'Coupon usage limit reached.'];
         }
-        $minOrder = isset($coupon['min_order_amount']) ? (float) $coupon['min_order_amount'] : null;
+        $minOrder = isset($coupon['min_order_amount']) && $coupon['min_order_amount'] !== null && $coupon['min_order_amount'] !== ''
+            ? round((float) $coupon['min_order_amount'], 2)
+            : null;
         if ($minOrder !== null && $subtotal < $minOrder) {
             return ['valid' => false, 'discount_amount' => 0.0, 'message' => 'Minimum order amount not met.'];
         }

@@ -32,8 +32,9 @@ class Products extends BaseController
      * GET api/products
      * Query params: q (search), sort, order, page, per_page, is_active, is_public, in_stock, min_price, max_price
      *
-     * per_page: usual pagination (1–100), "all"/"-1" for every row, or SKU-type tokens (comma, &, or whitespace)
-     * such as "beve&food" / "beve,food" to return only products whose sku starts with BEVE- or FOOD-.
+     * per_page: number (1–100), "all"/"-1" for every row, or SKU tokens (comma / whitespace / encoded & as %26).
+     * Unencoded "beve&food" in the URL becomes per_page=beve plus a separate param "food"; that case is detected
+     * so both BEVE- and FOOD- SKUs are included. Prefer per_page=beve,food or per_page=beve%26food when possible.
      */
     public function index(): ResponseInterface
     {
@@ -42,8 +43,17 @@ class Products extends BaseController
         $order   = strtolower((string) $this->request->getGet('order')) === 'desc' ? 'desc' : 'asc';
         $page    = max(1, (int) $this->request->getGet('page'));
         $perPageParam = (string) ($this->request->getGet('per_page') ?? '');
-        $perPageAll   = in_array(strtolower(trim($perPageParam)), ['all', '-1'], true);
+        $trimmedPerPage = trim($perPageParam);
+        $perPageAll   = in_array(strtolower($trimmedPerPage), ['all', '-1'], true);
+        $skuPrefixes  = [];
+        if (! $perPageAll) {
+            $skuPrefixes = $this->skuPrefixesFromPerPageParam($trimmedPerPage);
+            $skuPrefixes = $this->mergeSkuPrefixesForBeveAndFoodQuery($trimmedPerPage, $skuPrefixes);
+        }
         $perPage      = $perPageAll ? 0 : min(100, max(1, (int) $this->request->getGet('per_page') ?: 20));
+        if (! $perPageAll && $skuPrefixes !== []) {
+            $perPage = 100;
+        }
 
         $allowedSort = ['id', 'sku', 'name', 'slug', 'unit', 'is_public', 'is_active', 'created_at', 'updated_at'];
         if ($sort === null || ! in_array($sort, $allowedSort, true)) {
@@ -52,28 +62,32 @@ class Products extends BaseController
 
         $builder = $this->productModel->builder();
 
-        if (! $perPageAll) {
-            $skuPrefixes = $this->skuPrefixesFromPerPageParam(trim($perPageParam));
-            if ($skuPrefixes !== []) {
-                $builder->groupStart();
-                foreach ($skuPrefixes as $i => $prefix) {
-                    if ($i === 0) {
-                        $builder->like('sku', $prefix, 'after');
-                    } else {
-                        $builder->orLike('sku', $prefix, 'after');
-                    }
+        if (! $perPageAll && $skuPrefixes !== []) {
+            $builder->groupStart();
+            foreach ($skuPrefixes as $i => $prefix) {
+                if ($i === 0) {
+                    $builder->like('sku', $prefix, 'after');
+                } else {
+                    $builder->orLike('sku', $prefix, 'after');
                 }
-                $builder->groupEnd();
             }
+            $builder->groupEnd();
         }
 
         if ($q !== null && $q !== '') {
-            $builder->groupStart()
-                ->like('name', $q)
-                ->orLike('sku', $q)
-                ->orLike('slug', $q)
-                ->orLike('description', $q)
-                ->groupEnd();
+            $qt = trim((string) $q);
+            if (preg_match('/^(FOOD|BEVE)-?$/i', $qt, $m)) {
+                $builder->groupStart()
+                    ->like('sku', strtoupper($m[1]) . '-', 'after')
+                    ->groupEnd();
+            } else {
+                $builder->groupStart()
+                    ->like('name', $q)
+                    ->orLike('sku', $q)
+                    ->orLike('slug', $q)
+                    ->orLike('description', $q)
+                    ->groupEnd();
+            }
         }
 
         $isActive = $this->request->getGet('is_active');
@@ -99,10 +113,9 @@ class Products extends BaseController
         $total = $builder->countAllResults(false);
         $builder->orderBy($sort, $order);
         if ($perPageAll) {
-            // Return *all* rows for dropdown usage.
-            $page   = 1;
+            $page    = 1;
             $perPage = max(1, (int) $total);
-            $rows   = $builder->get()->getResultArray();
+            $rows    = $builder->get()->getResultArray();
         } else {
             $offset = ($page - 1) * $perPage;
             $rows   = $builder->get($perPage, $offset)->getResultArray();
@@ -152,10 +165,10 @@ class Products extends BaseController
     }
 
     /**
-     * When per_page is not numeric and not "all"/"-1", treat it as a list of SKU family tokens
-     * (separated by comma, &, or whitespace). Known tokens map to sku LIKE 'PREFIX%'.
+     * When per_page is not numeric and not "all"/"-1", treat it as SKU family tokens (comma, &, or whitespace).
+     * Maps beve → BEVE-, food → FOOD- for LIKE 'PREFIX%' on sku.
      *
-     * @return list<string> e.g. ['BEVE-', 'FOOD-']
+     * @return list<string>
      */
     protected function skuPrefixesFromPerPageParam(string $perPageParam): array
     {
@@ -185,6 +198,31 @@ class Products extends BaseController
     }
 
     /**
+     * If the client sends an unencoded URL like ?per_page=beve&food, PHP only sees per_page=beve and a separate "food"
+     * query key. Treat per_page=beve + presence of food (any value, including empty) as both prefixes; same for food + beve.
+     *
+     * @param list<string> $prefixes
+     * @return list<string>
+     */
+    protected function mergeSkuPrefixesForBeveAndFoodQuery(string $trimmedPerPage, array $prefixes): array
+    {
+        $t = strtolower($trimmedPerPage);
+        $get = $this->request->getGet();
+        if (! is_array($get)) {
+            return $prefixes;
+        }
+
+        if ($t === 'beve' && array_key_exists('food', $get) && ! in_array('FOOD-', $prefixes, true)) {
+            $prefixes[] = 'FOOD-';
+        }
+        if ($t === 'food' && array_key_exists('beve', $get) && ! in_array('BEVE-', $prefixes, true)) {
+            $prefixes[] = 'BEVE-';
+        }
+
+        return array_values(array_unique($prefixes));
+    }
+
+    /**
      * For given product IDs, return map: product_id => [ stock_qty, selling_price, list_price, discount_type, discount_value, rule_name, ... ]
      */
     protected function getStockAndPriceForProducts(array $productIds): array
@@ -197,13 +235,18 @@ class Products extends BaseController
         $sb     = $prefix . 'stock_batches';
 
         $batches = $this->stockBatchModel->db->table($sb)
-            ->select("{$sb}.id, {$sb}.product_id, {$sb}.remaining_qty, {$sb}.unit_cost, {$sb}.received_at")
+            ->select("{$sb}.id, {$sb}.product_id, {$sb}.remaining_qty, {$sb}.unit_cost, {$sb}.selling_price, {$sb}.received_at")
             ->whereIn('product_id', $productIds)
             ->where('remaining_qty >', 0)
             ->orderBy('product_id')
             ->orderBy('received_at', 'asc')
             ->get()
             ->getResultArray();
+
+        $skuById = [];
+        foreach ($this->productModel->whereIn('id', $productIds)->findAll() as $pr) {
+            $skuById[(int) $pr['id']] = (string) ($pr['sku'] ?? '');
+        }
 
         $productStock = [];
         $batchIds = [];
@@ -249,7 +292,17 @@ class Products extends BaseController
             $discountPercent = null;
             $ruleName = null;
             $first = $firstBatchByProduct[$pid] ?? null;
-            if ($first) {
+            $sku   = $skuById[$pid] ?? '';
+            if ($first && ProductModel::skuIsFoodOrBeverage($sku)) {
+                $rawSp = $first['selling_price'] ?? null;
+                if ($rawSp !== null && $rawSp !== '') {
+                    $fixed        = round((float) $rawSp, 2);
+                    $sellingPrice = $fixed;
+                    $listPrice    = $fixed;
+                    $ruleName     = 'Batch selling price';
+                }
+            }
+            if ($first && $sellingPrice === null) {
                 $rule = $rulesByBatch[(int) $first['id']] ?? null;
                 if ($rule) {
                     $unitCost = (float) $first['unit_cost'];

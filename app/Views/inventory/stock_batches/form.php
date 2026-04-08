@@ -30,19 +30,17 @@ if ($receivedAt && strlen($receivedAt) >= 16) {
                         </div>
 
                         <?php
-$showProductSearch = count($products) > 10;
-$showVendorSearch  = count($vendors) > 10;
+// Always show product filter (matches prod UX); vendor filter when list is large.
+$showVendorSearch = count($vendors) > 10;
 ?>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="product_id" class="form-label">Product <span class="text-danger">*</span></label>
-                                <?php if ($showProductSearch): ?>
                                 <input type="text" class="form-control mb-1" id="product_search" placeholder="Type to search products..." autocomplete="off" aria-label="Filter products">
-                                <?php endif; ?>
                                 <select class="form-select select-searchable" id="product_id" name="product_id" required data-search-input="product_search">
                                     <option value="">— Select product —</option>
                                     <?php foreach ($products as $p): ?>
-                                        <option value="<?= (int) $p['id'] ?>" data-search="<?= esc($p['name'] . ' ' . ($p['sku'] ?? '')) ?>"
+                                        <option value="<?= (int) $p['id'] ?>" data-sku="<?= esc($p['sku'] ?? '') ?>" data-search="<?= esc($p['name'] . ' ' . ($p['sku'] ?? '')) ?>"
                                             <?= (string) $productId === (string) $p['id'] ? ' selected' : '' ?>>
                                             <?= esc($p['name']) ?> (<?= esc($p['sku'] ?? '') ?>)
                                         </option>
@@ -68,6 +66,7 @@ $showVendorSearch  = count($vendors) > 10;
 
                         <div class="mb-3">
                             <label for="procurement_rule_id" class="form-label">Procurement rule</label>
+                            <div class="form-text mb-1">Optional for products with SKU starting with <code>BEVE-</code> or <code>FOOD-</code> (set <strong>Unit cost</strong> and <strong>Selling price</strong> on this batch).</div>
                             <select class="form-select" id="procurement_rule_id" name="procurement_rule_id">
                                 <option value="">— No rule —</option>
                                 <?php foreach ($rules as $r): ?>
@@ -79,20 +78,31 @@ $showVendorSearch  = count($vendors) > 10;
                         </div>
 
                         <div class="row">
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label for="purchased_qty" class="form-label">Purchased qty <span class="text-danger">*</span></label>
                                 <input type="number" class="form-control" id="purchased_qty" name="purchased_qty" required min="0" step="1"
                                        value="<?= esc(old('purchased_qty', $batch['purchased_qty'] ?? '0')) ?>">
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label for="remaining_qty" class="form-label">Remaining qty <span class="text-danger">*</span></label>
                                 <input type="number" class="form-control" id="remaining_qty" name="remaining_qty" required min="0" step="1"
                                        value="<?= esc(old('remaining_qty', $batch['remaining_qty'] ?? '0')) ?>">
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label for="unit_cost" class="form-label">Unit cost <span class="text-danger">*</span></label>
                                 <input type="number" class="form-control" id="unit_cost" name="unit_cost" required min="0" step="0.01"
                                        value="<?= esc(old('unit_cost', $batch['unit_cost'] ?? '0')) ?>">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <?php
+                                $spVal = old('selling_price', $isEdit && isset($batch['selling_price']) && $batch['selling_price'] !== null && $batch['selling_price'] !== ''
+                                    ? $batch['selling_price']
+                                    : '');
+                                ?>
+                                <label for="selling_price" class="form-label">Selling price</label>
+                                <input type="number" class="form-control" id="selling_price" name="selling_price" min="0" step="0.01"
+                                       value="<?= esc($spVal) ?>" placeholder="BEVE- / FOOD- only">
+                                <div class="form-text" id="selling_price_hint">Enabled when product SKU starts with <code>BEVE-</code> or <code>FOOD-</code>.</div>
                             </div>
                         </div>
 
@@ -149,5 +159,31 @@ $showVendorSearch  = count($vendors) > 10;
             if (selected) input.value = (selected.getAttribute('data-search') || selected.textContent || '').trim();
         }
     });
+
+    function skuAllowsSellingPrice(sku) {
+        if (!sku) return false;
+        var u = String(sku).toUpperCase();
+        return u.indexOf('BEVE-') === 0 || u.indexOf('FOOD-') === 0;
+    }
+    function updateSellingPriceFieldState() {
+        var sel = document.getElementById('product_id');
+        var input = document.getElementById('selling_price');
+        if (!sel || !input) return;
+        var opt = sel.options[sel.selectedIndex];
+        var sku = opt && opt.getAttribute('data-sku') ? opt.getAttribute('data-sku') : '';
+        var allow = skuAllowsSellingPrice(sku);
+        input.disabled = !allow;
+        if (!allow) {
+            input.value = '';
+            input.removeAttribute('required');
+        } else {
+            input.setAttribute('required', 'required');
+        }
+    }
+    var productSel = document.getElementById('product_id');
+    if (productSel) {
+        productSel.addEventListener('change', updateSellingPriceFieldState);
+        updateSellingPriceFieldState();
+    }
 })();
 </script>

@@ -57,7 +57,7 @@ class StockBatches extends BaseController
 
         $sortCol  = $this->request->getGet('sort');
         $sortOrder = strtolower((string) $this->request->getGet('order')) === 'asc' ? 'asc' : 'desc';
-        $allowedSort = ['batch_code', 'product_name', 'vendor_name', 'purchased_qty', 'remaining_qty', 'unit_cost', 'received_at'];
+        $allowedSort = ['batch_code', 'product_name', 'vendor_name', 'purchased_qty', 'remaining_qty', 'unit_cost', 'selling_price', 'received_at'];
         if ($sortCol !== null && in_array($sortCol, $allowedSort, true)) {
             $orderCol = $sortCol === 'product_name' ? "{$p}.name" : ($sortCol === 'vendor_name' ? "{$v}.name" : "{$sb}.{$sortCol}");
             $builder->orderBy($orderCol, $sortOrder);
@@ -110,7 +110,7 @@ class StockBatches extends BaseController
     public function create(): RedirectResponse
     {
         $rules = [
-            'batch_code'    => 'required|max_length[100]|is_unique[stock_batches.batch_code]',
+            'batch_code'    => 'required|max_length[100]',
             'product_id'    => 'required|integer',
             'vendor_id'     => 'required|integer',
             'purchased_qty' => 'required|integer|greater_than_equal_to[0]',
@@ -126,7 +126,8 @@ class StockBatches extends BaseController
 
         $productId = (int) $this->request->getPost('product_id');
         $vendorId  = (int) $this->request->getPost('vendor_id');
-        if (! $this->productModel->find($productId)) {
+        $productRow = $this->productModel->find($productId);
+        if (! $productRow) {
             return redirect()->back()->withInput()->with('errors', ['product_id' => 'Invalid product.']);
         }
         if (! $this->vendorModel->find($vendorId)) {
@@ -140,6 +141,12 @@ class StockBatches extends BaseController
             return redirect()->back()->withInput()->with('errors', ['remaining_qty' => 'Remaining qty cannot exceed purchased qty.']);
         }
 
+        $sku    = (string) ($productRow['sku'] ?? '');
+        $spNorm = $this->normalizedSellingPriceForBatch($sku);
+        if (! $spNorm['ok']) {
+            return redirect()->back()->withInput()->with('errors', $spNorm['errors']);
+        }
+
         $data = [
             'batch_code'    => $this->request->getPost('batch_code'),
             'product_id'    => $productId,
@@ -147,6 +154,7 @@ class StockBatches extends BaseController
             'purchased_qty' => $purchased,
             'remaining_qty' => $remaining,
             'unit_cost'     => (float) $this->request->getPost('unit_cost'),
+            'selling_price' => $spNorm['value'],
             'received_at'   => $receivedAt,
             'remarks'       => $this->request->getPost('remarks') ?: null,
         ];
@@ -222,7 +230,7 @@ class StockBatches extends BaseController
     protected function updateSubmit(int $id, array $batch): RedirectResponse
     {
         $rules = [
-            'batch_code'    => "required|max_length[100]|is_unique[stock_batches.batch_code,id,{$id}]",
+            'batch_code'    => 'required|max_length[100]',
             'product_id'    => 'required|integer',
             'vendor_id'     => 'required|integer',
             'purchased_qty' => 'required|integer|greater_than_equal_to[0]',
@@ -238,7 +246,8 @@ class StockBatches extends BaseController
 
         $productId = (int) $this->request->getPost('product_id');
         $vendorId  = (int) $this->request->getPost('vendor_id');
-        if (! $this->productModel->find($productId)) {
+        $productRow = $this->productModel->find($productId);
+        if (! $productRow) {
             return redirect()->back()->withInput()->with('errors', ['product_id' => 'Invalid product.']);
         }
         if (! $this->vendorModel->find($vendorId)) {
@@ -252,6 +261,12 @@ class StockBatches extends BaseController
             return redirect()->back()->withInput()->with('errors', ['remaining_qty' => 'Remaining qty cannot exceed purchased qty.']);
         }
 
+        $sku    = (string) ($productRow['sku'] ?? '');
+        $spNorm = $this->normalizedSellingPriceForBatch($sku);
+        if (! $spNorm['ok']) {
+            return redirect()->back()->withInput()->with('errors', $spNorm['errors']);
+        }
+
         $data = [
             'batch_code'    => $this->request->getPost('batch_code'),
             'product_id'    => $productId,
@@ -259,6 +274,7 @@ class StockBatches extends BaseController
             'purchased_qty' => $purchased,
             'remaining_qty' => $remaining,
             'unit_cost'     => (float) $this->request->getPost('unit_cost'),
+            'selling_price' => $spNorm['value'],
             'received_at'   => $receivedAt,
             'remarks'       => $this->request->getPost('remarks') ?: null,
         ];
@@ -295,5 +311,45 @@ class StockBatches extends BaseController
             $value .= ':00';
         }
         return $value;
+    }
+
+    /**
+     * @return array{ok: true, value: float|null}|array{ok: false, errors: array<string, string>}
+     */
+    protected function normalizedSellingPriceForBatch(string $sku): array
+    {
+        $post = $this->request->getPost('selling_price');
+        $isFb = ProductModel::skuIsFoodOrBeverage($sku);
+        if ($isFb) {
+            if ($post === null || trim((string) $post) === '') {
+                return [
+                    'ok'     => false,
+                    'errors' => ['selling_price' => 'Selling price is required for SKUs starting with BEVE- or FOOD-.'],
+                ];
+            }
+            if (! is_numeric($post)) {
+                return [
+                    'ok'     => false,
+                    'errors' => ['selling_price' => 'Enter a valid selling price.'],
+                ];
+            }
+            $v = round((float) $post, 2);
+            if ($v < 0) {
+                return [
+                    'ok'     => false,
+                    'errors' => ['selling_price' => 'Selling price cannot be negative.'],
+                ];
+            }
+
+            return ['ok' => true, 'value' => $v];
+        }
+        if ($post !== null && trim((string) $post) !== '' && is_numeric($post) && (float) $post !== 0.0) {
+            return [
+                'ok'     => false,
+                'errors' => ['selling_price' => 'Selling price applies only to SKUs starting with BEVE- or FOOD-.'],
+            ];
+        }
+
+        return ['ok' => true, 'value' => null];
     }
 }
