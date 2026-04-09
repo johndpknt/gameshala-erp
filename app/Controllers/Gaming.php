@@ -6,8 +6,10 @@ use App\Libraries\ProductCatalogPrice;
 use App\Models\CustomerModel;
 use App\Models\FoodBeverageItemModel;
 use App\Models\GamingCategoryModel;
+use App\Models\GamingControllerModel;
 use App\Models\GamingModeModel;
 use App\Models\GamingPriceRuleModel;
+use App\Models\GamingTitleModel;
 use App\Models\GamingVisitFoodItemModel;
 use App\Models\GamingVisitModel;
 use App\Models\InvoiceModel;
@@ -17,8 +19,10 @@ use CodeIgniter\HTTP\ResponseInterface;
 class Gaming extends BaseController
 {
     protected GamingCategoryModel $categoryModel;
+    protected GamingControllerModel $controllerModel;
     protected GamingModeModel $modeModel;
     protected GamingPriceRuleModel $priceRuleModel;
+    protected GamingTitleModel $titleModel;
     protected FoodBeverageItemModel $foodBeverageItemModel;
     protected GamingVisitModel $visitModel;
     protected GamingVisitFoodItemModel $visitFoodModel;
@@ -28,8 +32,10 @@ class Gaming extends BaseController
     public function __construct()
     {
         $this->categoryModel        = model(GamingCategoryModel::class);
+        $this->controllerModel      = model(GamingControllerModel::class);
         $this->modeModel            = model(GamingModeModel::class);
         $this->priceRuleModel       = model(GamingPriceRuleModel::class);
+        $this->titleModel           = model(GamingTitleModel::class);
         $this->foodBeverageItemModel = model(FoodBeverageItemModel::class);
         $this->visitModel           = model(GamingVisitModel::class);
         $this->visitFoodModel       = model(GamingVisitFoodItemModel::class);
@@ -45,14 +51,211 @@ class Gaming extends BaseController
         helper('form');
         $categories = $this->categoryModel->orderBy('name', 'asc')->findAll();
         $modes      = $this->modeModel->orderBy('name', 'asc')->findAll();
+        $prefix     = $this->controllerModel->db->DBPrefix;
+        $controllers = $this->controllerModel->builder()
+            ->select('gaming_controllers.*, gc.name AS category_name')
+            ->join($prefix . 'gaming_categories gc', 'gc.id = gaming_controllers.gaming_category_id', 'left')
+            ->orderBy('gaming_controllers.name', 'asc')
+            ->get()
+            ->getResultArray();
+        $titles = $this->titleModel->builder()
+            ->select('gaming_titles.*, gct.name AS controller_name, gc.name AS category_name')
+            ->join($prefix . 'gaming_controllers gct', 'gct.id = gaming_titles.gaming_controller_id', 'left')
+            ->join($prefix . 'gaming_categories gc', 'gc.id = gct.gaming_category_id', 'left')
+            ->orderBy('gct.name', 'asc')
+            ->orderBy('gaming_titles.name', 'asc')
+            ->get()
+            ->getResultArray();
 
         return view('layout/main', [
             'pageTitle' => 'Categories - Gaming',
             'content'   => view('gaming/categories', [
                 'categories' => $categories,
+                'controllers' => $controllers,
+                'titles'    => $titles,
                 'modes'     => $modes,
             ]),
         ]);
+    }
+
+    public function addController(): RedirectResponse
+    {
+        $rules = [
+            'name'               => 'required|max_length[50]',
+            'gaming_category_id' => 'required|integer',
+        ];
+        if (! $this->validate($rules)) {
+            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+        }
+
+        $name = strtoupper(trim((string) $this->request->getPost('name')));
+        $categoryId = (int) $this->request->getPost('gaming_category_id');
+        if (! $this->categoryModel->find($categoryId)) {
+            return redirect()->back()->with('error', 'Gaming category not found.');
+        }
+
+        $id = $this->controllerModel->insert([
+            'name'               => $name,
+            'gaming_category_id' => $categoryId,
+            'is_active'          => 1,
+        ]);
+        if ($id === false) {
+            $dbError = $this->controllerModel->db->error();
+            if ((int) ($dbError['code'] ?? 0) === 1062) {
+                return redirect()->back()->withInput()->with('error', 'Controller name already exists.');
+            }
+            return redirect()->back()->withInput()->with('error', 'Could not add controller name.');
+        }
+
+        $this->logActivity('gaming', 'controller_create', (int) $id, 'Created gaming controller: ' . $name);
+        return redirect()->back()->with('message', 'Controller name added.');
+    }
+
+    public function updateController(int $id): RedirectResponse
+    {
+        $controller = $this->controllerModel->find($id);
+        if (! $controller) {
+            return redirect()->back()->with('error', 'Controller name not found.');
+        }
+
+        $rules = [
+            'name'               => 'required|max_length[50]',
+            'gaming_category_id' => 'required|integer',
+        ];
+        if (! $this->validate($rules)) {
+            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+        }
+
+        $name = strtoupper(trim((string) $this->request->getPost('name')));
+        $categoryId = (int) $this->request->getPost('gaming_category_id');
+        if (! $this->categoryModel->find($categoryId)) {
+            return redirect()->back()->with('error', 'Gaming category not found.');
+        }
+
+        $ok = $this->controllerModel->update($id, [
+            'name'               => $name,
+            'gaming_category_id' => $categoryId,
+        ]);
+        if ($ok === false) {
+            $dbError = $this->controllerModel->db->error();
+            if ((int) ($dbError['code'] ?? 0) === 1062) {
+                return redirect()->back()->withInput()->with('error', 'Controller name already exists.');
+            }
+            return redirect()->back()->withInput()->with('error', 'Could not update controller name.');
+        }
+
+        $this->logActivity('gaming', 'controller_update', $id, 'Updated gaming controller: ' . $name);
+        return redirect()->back()->with('message', 'Controller name updated.');
+    }
+
+    public function setStatusController(int $id): RedirectResponse
+    {
+        $controller = $this->controllerModel->find($id);
+        if (! $controller) {
+            return redirect()->back()->with('error', 'Controller name not found.');
+        }
+
+        $status = (int) $this->request->getPost('is_active');
+        $status = $status === 1 ? 1 : 0;
+        $this->controllerModel->update($id, ['is_active' => $status]);
+        $action = $status === 1 ? 'controller_activate' : 'controller_deactivate';
+        $this->logActivity(
+            'gaming',
+            $action,
+            $id,
+            ($status === 1 ? 'Activated' : 'Deactivated') . ' gaming controller: ' . ($controller['name'] ?? '#' . $id)
+        );
+        return redirect()->back()->with('message', $status === 1 ? 'Controller marked active.' : 'Controller marked inactive.');
+    }
+
+    public function addTitle(): RedirectResponse
+    {
+        $rules = [
+            'name'                 => 'required|max_length[150]',
+            'gaming_controller_id' => 'required|integer',
+        ];
+        if (! $this->validate($rules)) {
+            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+        }
+
+        $name = trim((string) $this->request->getPost('name'));
+        $controllerId = (int) $this->request->getPost('gaming_controller_id');
+        if (! $this->controllerModel->find($controllerId)) {
+            return redirect()->back()->with('error', 'Controller name not found.');
+        }
+
+        $id = $this->titleModel->insert([
+            'name'                 => $name,
+            'gaming_controller_id' => $controllerId,
+            'is_active'            => 1,
+        ]);
+        if ($id === false) {
+            $dbError = $this->titleModel->db->error();
+            if ((int) ($dbError['code'] ?? 0) === 1062) {
+                return redirect()->back()->withInput()->with('error', 'Gaming title already exists for this controller.');
+            }
+            return redirect()->back()->withInput()->with('error', 'Could not add gaming title.');
+        }
+
+        $this->logActivity('gaming', 'title_create', (int) $id, 'Created gaming title: ' . $name);
+        return redirect()->back()->with('message', 'Gaming title added.');
+    }
+
+    public function updateTitle(int $id): RedirectResponse
+    {
+        $title = $this->titleModel->find($id);
+        if (! $title) {
+            return redirect()->back()->with('error', 'Gaming title not found.');
+        }
+
+        $rules = [
+            'name'                 => 'required|max_length[150]',
+            'gaming_controller_id' => 'required|integer',
+        ];
+        if (! $this->validate($rules)) {
+            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+        }
+
+        $name = trim((string) $this->request->getPost('name'));
+        $controllerId = (int) $this->request->getPost('gaming_controller_id');
+        if (! $this->controllerModel->find($controllerId)) {
+            return redirect()->back()->with('error', 'Controller name not found.');
+        }
+
+        $ok = $this->titleModel->update($id, [
+            'name'                 => $name,
+            'gaming_controller_id' => $controllerId,
+        ]);
+        if ($ok === false) {
+            $dbError = $this->titleModel->db->error();
+            if ((int) ($dbError['code'] ?? 0) === 1062) {
+                return redirect()->back()->withInput()->with('error', 'Gaming title already exists for this controller.');
+            }
+            return redirect()->back()->withInput()->with('error', 'Could not update gaming title.');
+        }
+
+        $this->logActivity('gaming', 'title_update', $id, 'Updated gaming title: ' . $name);
+        return redirect()->back()->with('message', 'Gaming title updated.');
+    }
+
+    public function setStatusTitle(int $id): RedirectResponse
+    {
+        $title = $this->titleModel->find($id);
+        if (! $title) {
+            return redirect()->back()->with('error', 'Gaming title not found.');
+        }
+
+        $status = (int) $this->request->getPost('is_active');
+        $status = $status === 1 ? 1 : 0;
+        $this->titleModel->update($id, ['is_active' => $status]);
+        $action = $status === 1 ? 'title_activate' : 'title_deactivate';
+        $this->logActivity(
+            'gaming',
+            $action,
+            $id,
+            ($status === 1 ? 'Activated' : 'Deactivated') . ' gaming title: ' . ($title['name'] ?? '#' . $id)
+        );
+        return redirect()->back()->with('message', $status === 1 ? 'Gaming title marked active.' : 'Gaming title marked inactive.');
     }
 
     public function addCategory(): RedirectResponse
