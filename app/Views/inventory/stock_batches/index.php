@@ -6,16 +6,27 @@
 
     <?php
     $batchBase = base_url('inventory/stock-batches');
-    $batchSortUrl = function ($col) use ($batchBase, $searchQ, $sort, $order) {
+    $activeTab = ($activeTab ?? 'regular') === 'beverage' ? 'beverage' : 'regular';
+    $batchSortUrl = function ($col) use ($batchBase, $searchQ, $sort, $order, $activeTab) {
         $next = ($sort === $col && $order === 'asc') ? 'desc' : 'asc';
-        return $batchBase . '?' . http_build_query(array_filter(['q' => $searchQ, 'sort' => $col, 'order' => $next]));
+        return $batchBase . '?' . http_build_query(array_filter(['tab' => $activeTab, 'q' => $searchQ, 'sort' => $col, 'order' => $next]));
     };
     $batchArrow = function ($col) use ($sort, $order) {
         if ($sort !== $col) return '';
         return $order === 'asc' ? ' ↑' : ' ↓';
     };
     ?>
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'regular' ? 'active' : '' ?>" href="<?= $batchBase ?>">Stock Batches</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'beverage' ? 'active' : '' ?>" href="<?= $batchBase . '?tab=beverage' ?>">Stock Batches Beverage</a>
+        </li>
+    </ul>
+
     <form method="get" action="<?= base_url('inventory/stock-batches') ?>" class="mb-4">
+        <input type="hidden" name="tab" value="<?= esc($activeTab) ?>">
         <div class="input-group" style="max-width: 400px;">
             <input type="search" name="q" class="form-control" placeholder="Search by batch code, product, vendor..."
                    value="<?= esc($searchQ) ?>">

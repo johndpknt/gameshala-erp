@@ -83,8 +83,10 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                         <th>#</th>
                         <th>Customer</th>
                         <th>Game</th>
-                        <th>Started</th>
-                        <th>Ended</th>
+                        <th>Date</th>
+                        <th>Start Time</th>
+                        <th>End Time</th>
+                        <th>Total Time</th>
                         <th>Gaming</th>
                         <th>Food</th>
                         <th>Total</th>
@@ -94,12 +96,27 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                 </thead>
                 <tbody>
                     <?php foreach ($finished as $v): ?>
+                        <?php
+                            $startTs = ! empty($v['start_time']) ? strtotime($v['start_time']) : false;
+                            $endTs = ! empty($v['end_time']) ? strtotime($v['end_time']) : false;
+                            $dateTs = $startTs ?: $endTs;
+                            $durationLabel = '—';
+                            if ($startTs !== false && $endTs !== false && $endTs >= $startTs) {
+                                $durationSeconds = $endTs - $startTs;
+                                $hours = intdiv($durationSeconds, 3600);
+                                $minutes = intdiv($durationSeconds % 3600, 60);
+                                $seconds = $durationSeconds % 60;
+                                $durationLabel = sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+                            }
+                        ?>
                         <tr>
                             <td><?= (int) $v['id'] ?></td>
                             <td><?= esc($v['customer_name'] ?? '—') ?></td>
                             <td><?= esc($v['category_name'] ?? '—') ?> / <?= esc($v['mode_name'] ?? '—') ?></td>
-                            <td><?= $v['start_time'] ? date('d M H:i', strtotime($v['start_time'])) : '—' ?></td>
-                            <td><?= $v['end_time'] ? date('d M H:i', strtotime($v['end_time'])) : '—' ?></td>
+                            <td><?= $dateTs ? date('d M Y', $dateTs) : '—' ?></td>
+                            <td><?= $startTs ? date('h:i:s A', $startTs) : '—' ?></td>
+                            <td><?= $endTs ? date('h:i:s A', $endTs) : '—' ?></td>
+                            <td><?= esc($durationLabel) ?></td>
                             <td>₹<?= number_format((float) ($v['gaming_amount'] ?? 0), 2) ?></td>
                             <td>₹<?= number_format((float) ($v['food_amount'] ?? 0), 2) ?></td>
                             <td><strong>₹<?= number_format((float) ($v['total_amount'] ?? 0), 2) ?></strong></td>

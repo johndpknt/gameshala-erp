@@ -33,6 +33,8 @@ class StockBatches extends BaseController
     {
         helper('form');
         $q = $this->request->getGet('q');
+        $tab = strtolower(trim((string) $this->request->getGet('tab')));
+        $activeTab = $tab === 'beverage' ? 'beverage' : 'regular';
         $db = $this->stockBatchModel->db;
         $prefix = $db->DBPrefix;
         $sb  = $prefix . 'stock_batches';
@@ -46,6 +48,12 @@ class StockBatches extends BaseController
             ->select("{$sb}.*, {$p}.name AS product_name, {$p}.sku AS product_sku, {$v}.name AS vendor_name, {$subSelect} AS rule_name", false)
             ->join($p, "{$sb}.product_id = {$p}.id", 'left')
             ->join($v, "{$sb}.vendor_id = {$v}.id", 'left');
+
+        if ($activeTab === 'beverage') {
+            $builder->where("({$p}.sku LIKE 'BEVE-%' OR {$p}.sku LIKE 'FOOD-%')", null, false);
+        } else {
+            $builder->where("(COALESCE({$p}.sku, '') NOT LIKE 'BEVE-%' AND COALESCE({$p}.sku, '') NOT LIKE 'FOOD-%')", null, false);
+        }
 
         if ($q !== null && $q !== '') {
             $builder->groupStart()
@@ -73,6 +81,7 @@ class StockBatches extends BaseController
             'searchQ'   => $q ?? '',
             'sort'      => $sortCol ?? 'received_at',
             'order'     => $sortCol !== null && in_array($sortCol, $allowedSort, true) ? $sortOrder : 'desc',
+            'activeTab' => $activeTab,
         ];
 
         return view('layout/main', [
