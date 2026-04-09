@@ -35,7 +35,7 @@ $orderArrow = function ($col) use ($sort, $order) {
                     </tr>
                 <?php else: ?>
                     <?php foreach ($orders as $o): ?>
-                        <tr>
+                        <tr class="<?= ($o['status'] ?? '') === 'PAID' ? 'table-success' : '' ?>">
                             <td><code class="small"><?= esc($o['order_number']) ?></code></td>
                             <td><?= esc($o['customer_name'] ?? '—') ?></td>
                             <td><?= esc($o['customer_phone'] ?? '—') ?></td>

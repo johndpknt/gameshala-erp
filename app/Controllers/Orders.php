@@ -97,7 +97,7 @@ class Orders extends BaseController
     }
 
     /**
-     * Store new order: create order + items, deduct stock, create stock_movements.
+     * Store new order: create order + items, deduct stock, create stock_movements + invoice.
      */
     public function store(): RedirectResponse
     {
@@ -230,6 +230,15 @@ class Orders extends BaseController
                 $this->couponModel->set('used_count', 'used_count + 1', false)->where('id', $couponId)->update();
             }
 
+            $this->createInvoiceForOrder($orderId, [
+                'customer_id'     => (int) $customerId,
+                'subtotal'        => (float) $subtotal,
+                'discount_amount' => (float) $discountAmount,
+                'tax_amount'      => (float) $taxAmount,
+                'total_amount'    => (float) $totalAmount,
+                'order_number'    => $orderNumber,
+            ]);
+
             $this->logActivity('sales', 'order_create', $orderId, 'Created order: ' . $orderNumber);
             $this->orderModel->db->transComplete();
         } catch (\Throwable $e) {
@@ -241,7 +250,7 @@ class Orders extends BaseController
             return redirect()->back()->withInput()->with('error', 'Order could not be created.');
         }
 
-        return redirect()->to('sales/orders')->with('message', 'Order created: ' . $orderNumber);
+        return redirect()->to('sales/orders')->with('message', 'Order created: ' . $orderNumber . '. Invoice created.');
     }
 
     /**
@@ -263,26 +272,33 @@ class Orders extends BaseController
         $this->orderModel->update($id, ['status' => $status]);
 
         if ($status === 'PAID') {
-            $existing = $this->invoiceModel->where('order_id', $id)->first();
-            if (! $existing) {
-                $invoiceNumber = 'INV-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
-                $this->invoiceModel->insert([
-                    'invoice_number'  => $invoiceNumber,
-                    'order_id'        => $id,
-                    'customer_id'     => (int) $order['customer_id'],
-                    'subtotal'        => (float) $order['subtotal'],
-                    'discount_amount' => (float) $order['discount_amount'],
-                    'tax_amount'      => (float) $order['tax_amount'],
-                    'total_amount'    => (float) $order['total_amount'],
-                    'status'          => 'ISSUED',
-                    'issued_at'       => date('Y-m-d H:i:s'),
-                ]);
-                $this->logActivity('sales', 'invoice_create', (int) $this->invoiceModel->getInsertID(), 'Invoice ' . $invoiceNumber . ' for order ' . ($order['order_number'] ?? ''));
-            }
+            $this->createInvoiceForOrder($id, $order);
         }
 
         $this->logActivity('sales', 'order_status', $id, 'Order status set to ' . $status);
         return redirect()->back()->with('message', 'Order status updated to ' . $status . ($status === 'PAID' ? '. Invoice created.' : ''));
+    }
+
+    protected function createInvoiceForOrder(int $orderId, array $order): void
+    {
+        $existing = $this->invoiceModel->where('order_id', $orderId)->first();
+        if ($existing) {
+            return;
+        }
+
+        $invoiceNumber = 'INV-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
+        $this->invoiceModel->insert([
+            'invoice_number'  => $invoiceNumber,
+            'order_id'        => $orderId,
+            'customer_id'     => (int) ($order['customer_id'] ?? 0),
+            'subtotal'        => (float) ($order['subtotal'] ?? 0),
+            'discount_amount' => (float) ($order['discount_amount'] ?? 0),
+            'tax_amount'      => (float) ($order['tax_amount'] ?? 0),
+            'total_amount'    => (float) ($order['total_amount'] ?? 0),
+            'status'          => 'ISSUED',
+            'issued_at'       => date('Y-m-d H:i:s'),
+        ]);
+        $this->logActivity('sales', 'invoice_create', (int) $this->invoiceModel->getInsertID(), 'Invoice ' . $invoiceNumber . ' for order ' . ($order['order_number'] ?? ''));
     }
 
     /**
