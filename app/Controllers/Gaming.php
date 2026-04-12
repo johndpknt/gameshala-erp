@@ -15,6 +15,7 @@ use App\Models\GamingVisitModel;
 use App\Models\InvoiceModel;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
+use CodeIgniter\I18n\Time;
 
 class Gaming extends BaseController
 {
@@ -747,11 +748,10 @@ class Gaming extends BaseController
         if (! $visit || ($visit['status'] ?? '') !== 'ONGOING') {
             return redirect()->back()->with('error', 'Session not found or not ongoing.');
         }
-        $endTime = date('Y-m-d H:i:s');
-        $this->visitModel->update($id, ['end_time' => $endTime]);
+        $endTime = Time::now()->format('Y-m-d H:i:s');
 
         $rule = $this->priceRuleModel->find($visit['gaming_price_rule_id']);
-        $start = strtotime($visit['start_time']);
+        $start = strtotime((string) ($visit['start_time'] ?? ''));
         $end   = strtotime($endTime);
         $minutes = max(0, ($end - $start) / 60);
         $price       = (float) $rule['price'];
@@ -767,10 +767,11 @@ class Gaming extends BaseController
         $totalAmount = round($gamingAmount + $foodAmount, 2);
 
         $this->visitModel->update($id, [
-            'gaming_amount' => $gamingAmount,
-            'food_amount'   => $foodAmount,
-            'total_amount' => $totalAmount,
-            'status'       => 'FINISHED',
+            'end_time'       => $endTime,
+            'gaming_amount'  => $gamingAmount,
+            'food_amount'    => $foodAmount,
+            'total_amount'   => $totalAmount,
+            'status'         => 'FINISHED',
         ]);
         $this->logActivity('gaming', 'visit_end', $id, 'Ended gaming session #' . $id . ', total ₹' . $totalAmount);
         return redirect()->back()->with('message', 'Session ended. Total: ₹' . number_format($totalAmount, 2) . '. Mark as paid when the customer pays.');

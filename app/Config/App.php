@@ -133,7 +133,8 @@ class App extends BaseConfig
      * @see https://www.php.net/manual/en/timezones.php for list of timezones
      *      supported by PHP.
      */
-    public string $appTimezone = 'UTC';
+    /** Set to your venue timezone so session start/end and billing stay aligned. */
+    public string $appTimezone = 'Asia/Kolkata';
 
     /**
      * --------------------------------------------------------------------------

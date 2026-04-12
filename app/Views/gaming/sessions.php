@@ -11,6 +11,25 @@ $foodItems           = $foodItems ?? [];
 $priceRules          = $priceRules ?? [];
 $priceTypeLabels     = $priceTypeLabels ?? \App\Models\GamingPriceRuleModel::priceTypeLabels();
 $sessionsBaseUrl     = base_url('gaming/sessions');
+
+if (! function_exists('gaming_visit_unix')) {
+    /**
+     * @param mixed $raw DB datetime string or empty
+     */
+    function gaming_visit_unix($raw): ?int
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        $s = trim((string) $raw);
+        if ($s === '' || str_starts_with($s, '0000-00-00')) {
+            return null;
+        }
+        $t = strtotime($s);
+
+        return $t !== false ? $t : null;
+    }
+}
 ?>
 <div class="container py-4 px-3 px-sm-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
@@ -41,7 +60,8 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                                 </div>
                                 <div class="text-end">
                                     <div class="text-muted small text-uppercase"><i class="bi bi-clock me-1"></i>Duration</div>
-                                    <div class="session-timer display-6 fw-bold text-primary lh-1" style="font-variant-numeric: tabular-nums;" data-start="<?= $v['start_time'] ? date('c', strtotime($v['start_time'])) : '' ?>">—</div>
+                                    <?php $stUnix = gaming_visit_unix($v['start_time'] ?? null); ?>
+                                    <div class="session-timer display-6 fw-bold text-primary lh-1" style="font-variant-numeric: tabular-nums;" data-start-unix="<?= $stUnix !== null ? (int) $stUnix : '' ?>">—</div>
                                 </div>
                             </div>
                             <p class="mb-1"><strong>Customer:</strong> <?= esc($v['customer_name'] ?? '—') ?> <?php if (! empty($v['customer_phone'])): ?>(<?= esc($v['customer_phone']) ?>)<?php endif; ?></p>
@@ -97,25 +117,25 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                 <tbody>
                     <?php foreach ($finished as $v): ?>
                         <?php
-                            $startTs = ! empty($v['start_time']) ? strtotime($v['start_time']) : false;
-                            $endTs = ! empty($v['end_time']) ? strtotime($v['end_time']) : false;
-                            $dateTs = $startTs ?: $endTs;
+                            $startTs = gaming_visit_unix($v['start_time'] ?? null);
+                            $endTs = gaming_visit_unix($v['end_time'] ?? null);
+                            $dateTs = $startTs ?? $endTs;
                             $durationLabel = '—';
-                            if ($startTs !== false && $endTs !== false && $endTs >= $startTs) {
+                            if ($startTs !== null && $endTs !== null && $endTs >= $startTs) {
                                 $durationSeconds = $endTs - $startTs;
                                 $hours = intdiv($durationSeconds, 3600);
                                 $minutes = intdiv($durationSeconds % 3600, 60);
                                 $seconds = $durationSeconds % 60;
-                                $durationLabel = sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+                                $durationLabel = sprintf('%d:%02d:%02d', $hours, $minutes, $seconds);
                             }
                         ?>
                         <tr>
                             <td><?= (int) $v['id'] ?></td>
                             <td><?= esc($v['customer_name'] ?? '—') ?></td>
                             <td><?= esc($v['category_name'] ?? '—') ?> / <?= esc($v['mode_name'] ?? '—') ?></td>
-                            <td><?= $dateTs ? date('d M Y', $dateTs) : '—' ?></td>
-                            <td><?= $startTs ? date('h:i:s A', $startTs) : '—' ?></td>
-                            <td><?= $endTs ? date('h:i:s A', $endTs) : '—' ?></td>
+                            <td><?= $dateTs !== null ? date('d M Y', $dateTs) : '—' ?></td>
+                            <td><?= $startTs !== null ? date('d M Y, h:i A', $startTs) : '—' ?></td>
+                            <td><?= $endTs !== null ? date('d M Y, h:i A', $endTs) : '—' ?></td>
                             <td><?= esc($durationLabel) ?></td>
                             <td>₹<?= number_format((float) ($v['gaming_amount'] ?? 0), 2) ?></td>
                             <td>₹<?= number_format((float) ($v['food_amount'] ?? 0), 2) ?></td>
@@ -173,6 +193,16 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
             <?= form_open(base_url('gaming/sessions/start'), ['id' => 'startSessionForm']) ?>
                 <?= csrf_field() ?>
                 <input type="hidden" name="customer_id" id="customerId" value="">
+                <?php
+                $ssNowH24 = (int) date('H');
+                $ssNowMin = date('i');
+                $ssNowDate = date('Y-m-d');
+                $ssNowH12 = $ssNowH24 % 12;
+                if ($ssNowH12 === 0) {
+                    $ssNowH12 = 12;
+                }
+                $ssNowAmpm = $ssNowH24 < 12 ? 'AM' : 'PM';
+                ?>
                 <div class="modal-body">
                     <div class="mb-4">
                         <label class="form-label fw-semibold">Customer</label>
@@ -215,15 +245,38 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
                         </select>
                     </div>
                     <div class="row g-2">
-                        <div class="col-6">
+                        <div class="col-sm-6">
                             <label for="noOfPlayers" class="form-label">No. of players</label>
                             <input type="number" class="form-control" id="noOfPlayers" name="no_of_players" value="1" min="1">
                         </div>
-                        <div class="col-6">
-                            <label for="startTime" class="form-label">Start time <span class="text-danger">*</span></label>
-                            <input type="datetime-local" class="form-control" id="startTime" name="start_time" value="<?= date('Y-m-d\TH:i') ?>" required>
+                        <div class="col-sm-6">
+                            <label for="startSessionDate" class="form-label">Start date <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control font-monospace" id="startSessionDate" required value="<?= esc($ssNowDate) ?>" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10" pattern="\d{4}-\d{2}-\d{2}" title="Use calendar order: YYYY-MM-DD (example 2026-04-12)">
                         </div>
                     </div>
+                    <div class="row g-2 mt-2">
+                        <div class="col-12">
+                            <span id="startSessionTimeLabel" class="form-label d-block">Start time <span class="text-danger">*</span> <span class="text-muted fw-normal small">(12-hour)</span></span>
+                            <div class="d-flex gap-2 align-items-center flex-wrap" style="max-width: 22rem" role="group" aria-labelledby="startSessionTimeLabel">
+                                <select class="form-select" style="min-width: 3.5rem; width: auto" id="startSessionHour12" required aria-label="Hour, 1 to 12">
+                                    <?php for ($n = 1; $n <= 12; $n++): ?>
+                                        <option value="<?= $n ?>"<?= $n === $ssNowH12 ? ' selected' : '' ?>><?= $n ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                                <span class="text-secondary user-select-none" aria-hidden="true">:</span>
+                                <select class="form-select" style="min-width: 3.25rem; width: auto" id="startSessionMinute" required aria-label="Minute">
+                                    <?php for ($m = 0; $m < 60; $m++): $mv = sprintf('%02d', $m); ?>
+                                        <option value="<?= $mv ?>"<?= $mv === $ssNowMin ? ' selected' : '' ?>><?= $mv ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                                <select class="form-select" style="min-width: 4.5rem; width: auto" id="startSessionAmPm" required aria-label="AM or PM">
+                                    <option value="AM"<?= $ssNowAmpm === 'AM' ? ' selected' : '' ?>>AM</option>
+                                    <option value="PM"<?= $ssNowAmpm === 'PM' ? ' selected' : '' ?>>PM</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" name="start_time" id="startTime" value="<?= esc($ssNowDate . ' ' . date('H:i:s')) ?>">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -300,10 +353,10 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
     function updateSessionTimers() {
         var now = Date.now() / 1000;
         document.querySelectorAll('.session-timer').forEach(function (el) {
-            var start = el.getAttribute('data-start');
-            if (!start) { el.textContent = '—'; return; }
-            var startSec = new Date(start).getTime() / 1000;
-            if (isNaN(startSec)) { el.textContent = '—'; return; }
+            var raw = el.getAttribute('data-start-unix');
+            if (!raw) { el.textContent = '—'; return; }
+            var startSec = parseInt(raw, 10);
+            if (isNaN(startSec) || startSec <= 0) { el.textContent = '—'; return; }
             el.textContent = formatDuration(now - startSec);
         });
     }
@@ -321,6 +374,49 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
     var customerDisplay = document.getElementById('customerDisplay');
     var customerError = document.getElementById('customerError');
     var searchTimeout = null;
+
+    function pad2(n) {
+        n = parseInt(n, 10);
+        if (isNaN(n)) return '00';
+        return (n < 10 ? '0' : '') + n;
+    }
+    function formatLocalYmd(d) {
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    }
+    function localWallClockTo12h(d) {
+        var h24 = d.getHours();
+        var mi = d.getMinutes();
+        var h12 = h24 % 12;
+        if (h12 === 0) h12 = 12;
+        return { h12: h12, mm: pad2(mi), ap: h24 < 12 ? 'AM' : 'PM' };
+    }
+    function twelveTo24Parts(h12Str, ap, mmStr) {
+        var h12 = parseInt(h12Str, 10);
+        var mm = parseInt(mmStr, 10);
+        if (isNaN(h12) || h12 < 1 || h12 > 12 || isNaN(mm) || mm < 0 || mm > 59) return null;
+        var h24;
+        if (ap === 'AM') {
+            h24 = h12 === 12 ? 0 : h12;
+        } else if (ap === 'PM') {
+            h24 = h12 === 12 ? 12 : h12 + 12;
+        } else {
+            return null;
+        }
+        return { h24: h24, m: mm };
+    }
+    function syncStartTimeHidden() {
+        var dEl = document.getElementById('startSessionDate');
+        var hour12El = document.getElementById('startSessionHour12');
+        var minEl = document.getElementById('startSessionMinute');
+        var apEl = document.getElementById('startSessionAmPm');
+        var hEl = document.getElementById('startTime');
+        if (!dEl || !hour12El || !minEl || !apEl || !hEl) return;
+        var d = (dEl.value || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+        var p = twelveTo24Parts(hour12El.value, apEl.value, minEl.value);
+        if (!p) return;
+        hEl.value = d + ' ' + pad2(p.h24) + ':' + pad2(p.m) + ':00';
+    }
 
     function showCustomerFound(name, phone, id) {
         customerIdEl.value = id;
@@ -350,12 +446,38 @@ $sessionsBaseUrl     = base_url('gaming/sessions');
         if (toggleText) toggleText.textContent = '+ New customer? Add name & phone';
         if (startSessionForm) startSessionForm.reset();
         document.getElementById('noOfPlayers').value = '1';
-        document.getElementById('startTime').value = '<?= date('Y-m-d\TH:i') ?>';
+        var dEl = document.getElementById('startSessionDate');
+        var hour12El = document.getElementById('startSessionHour12');
+        var minEl = document.getElementById('startSessionMinute');
+        var apEl = document.getElementById('startSessionAmPm');
+        var now = new Date();
+        var t12 = localWallClockTo12h(now);
+        if (dEl) dEl.value = formatLocalYmd(now);
+        if (hour12El) hour12El.value = String(t12.h12);
+        if (minEl) minEl.value = t12.mm;
+        if (apEl) apEl.value = t12.ap;
+        syncStartTimeHidden();
     }
 
     if (startSessionModal) {
         startSessionModal.addEventListener('show.bs.modal', function () { resetStartSessionForm(); });
     }
+
+    var startSessionDateEl = document.getElementById('startSessionDate');
+    var startSessionHour12El = document.getElementById('startSessionHour12');
+    var startSessionMinuteEl = document.getElementById('startSessionMinute');
+    var startSessionAmPmEl = document.getElementById('startSessionAmPm');
+    if (startSessionDateEl) {
+        startSessionDateEl.addEventListener('change', syncStartTimeHidden);
+        startSessionDateEl.addEventListener('input', syncStartTimeHidden);
+    }
+    if (startSessionHour12El) startSessionHour12El.addEventListener('change', syncStartTimeHidden);
+    if (startSessionMinuteEl) startSessionMinuteEl.addEventListener('change', syncStartTimeHidden);
+    if (startSessionAmPmEl) startSessionAmPmEl.addEventListener('change', syncStartTimeHidden);
+    if (startSessionForm) {
+        startSessionForm.addEventListener('submit', function () { syncStartTimeHidden(); });
+    }
+    syncStartTimeHidden();
 
     var toggleBtn = document.getElementById('toggleNewCustomer');
     var newCustomerFields = document.getElementById('newCustomerFields');
