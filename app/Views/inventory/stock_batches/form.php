@@ -66,9 +66,10 @@ $showVendorSearch = count($vendors) > 10;
 
                         <div class="mb-3">
                             <label for="procurement_rule_id" class="form-label">Procurement rule</label>
-                            <div class="form-text mb-1">Optional for products with SKU starting with <code>BEVE-</code> or <code>FOOD-</code> (set <strong>Unit cost</strong> and <strong>Selling price</strong> on this batch).</div>
+                            <div class="form-text mb-1">Optional for products with SKU starting with <code>BEVE-</code> or <code>FOOD-</code> (set <strong>Unit cost</strong> and <strong>Selling price</strong> on this batch). Select <strong>Own rule</strong> when you want to enter selling price manually.</div>
                             <select class="form-select" id="procurement_rule_id" name="procurement_rule_id">
                                 <option value="">— No rule —</option>
+                                <option value="own" <?= (string) $ruleId === 'own' ? ' selected' : '' ?>>Own rule (manual selling price)</option>
                                 <?php foreach ($rules as $r): ?>
                                     <option value="<?= (int) $r['id'] ?>" <?= (string) $ruleId === (string) $r['id'] ? ' selected' : '' ?>>
                                         <?= esc($r['name']) ?> (<?= esc($r['discount_type'] ?? 'FLAT') ?>: <?= esc($r['discount_value'] ?? 0) ?>)
@@ -93,16 +94,27 @@ $showVendorSearch = count($vendors) > 10;
                                 <input type="number" class="form-control" id="unit_cost" name="unit_cost" required min="0" step="0.01"
                                        value="<?= esc(old('unit_cost', $batch['unit_cost'] ?? '0')) ?>">
                             </div>
-                            <div class="col-md-3 mb-3">
-                                <?php
-                                $spVal = old('selling_price', $isEdit && isset($batch['selling_price']) && $batch['selling_price'] !== null && $batch['selling_price'] !== ''
-                                    ? $batch['selling_price']
-                                    : '');
-                                ?>
+                        </div>
+                        <?php
+                        $spVal = old('selling_price', $isEdit && isset($batch['selling_price']) && $batch['selling_price'] !== null && $batch['selling_price'] !== ''
+                            ? $batch['selling_price']
+                            : '');
+                        $ownRuleDiscountVal = old('own_rule_discount', $isEdit && isset($batch['own_rule_discount']) && $batch['own_rule_discount'] !== null && $batch['own_rule_discount'] !== ''
+                            ? $batch['own_rule_discount']
+                            : '');
+                        ?>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
                                 <label for="selling_price" class="form-label">Selling price</label>
                                 <input type="number" class="form-control" id="selling_price" name="selling_price" min="0" step="0.01"
                                        value="<?= esc($spVal) ?>" placeholder="BEVE- / FOOD- only">
-                                <div class="form-text" id="selling_price_hint">Enabled when product SKU starts with <code>BEVE-</code> or <code>FOOD-</code>.</div>
+                                <div class="form-text" id="selling_price_hint">Enabled when product SKU starts with <code>BEVE-</code> or <code>FOOD-</code>, or when <strong>Own rule</strong> is selected.</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="own_rule_discount" class="form-label">Own rule discount</label>
+                                <input type="number" class="form-control" id="own_rule_discount" name="own_rule_discount" min="0" step="0.01"
+                                       value="<?= esc($ownRuleDiscountVal) ?>" placeholder="Per-unit discount">
+                                <div class="form-text" id="own_rule_discount_hint">Required for <strong>Own rule</strong>. Used to show discount on order page.</div>
                             </div>
                         </div>
 
@@ -165,13 +177,19 @@ $showVendorSearch = count($vendors) > 10;
         var u = String(sku).toUpperCase();
         return u.indexOf('BEVE-') === 0 || u.indexOf('FOOD-') === 0;
     }
+    function ownRuleSelected() {
+        var ruleSel = document.getElementById('procurement_rule_id');
+        return !!ruleSel && String(ruleSel.value || '').toLowerCase() === 'own';
+    }
     function updateSellingPriceFieldState() {
         var sel = document.getElementById('product_id');
         var input = document.getElementById('selling_price');
+        var ownDiscountInput = document.getElementById('own_rule_discount');
         if (!sel || !input) return;
         var opt = sel.options[sel.selectedIndex];
         var sku = opt && opt.getAttribute('data-sku') ? opt.getAttribute('data-sku') : '';
-        var allow = skuAllowsSellingPrice(sku);
+        var isOwn = ownRuleSelected();
+        var allow = skuAllowsSellingPrice(sku) || isOwn;
         input.disabled = !allow;
         if (!allow) {
             input.value = '';
@@ -179,11 +197,24 @@ $showVendorSearch = count($vendors) > 10;
         } else {
             input.setAttribute('required', 'required');
         }
+        if (ownDiscountInput) {
+            ownDiscountInput.disabled = !isOwn;
+            if (!isOwn) {
+                ownDiscountInput.value = '';
+                ownDiscountInput.removeAttribute('required');
+            } else {
+                ownDiscountInput.setAttribute('required', 'required');
+            }
+        }
     }
     var productSel = document.getElementById('product_id');
     if (productSel) {
         productSel.addEventListener('change', updateSellingPriceFieldState);
-        updateSellingPriceFieldState();
     }
+    var ruleSel = document.getElementById('procurement_rule_id');
+    if (ruleSel) {
+        ruleSel.addEventListener('change', updateSellingPriceFieldState);
+    }
+    updateSellingPriceFieldState();
 })();
 </script>

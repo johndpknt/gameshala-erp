@@ -383,27 +383,31 @@ class Orders extends BaseController
 
         $unitCost = (float) $batch['unit_cost'];
         $sku      = (string) ($product['sku'] ?? '');
+        $rawSp    = $batch['selling_price'] ?? null;
+        $ownRuleDiscount = (float) ($batch['own_rule_discount'] ?? 0);
+
+        // Manual/own rule pricing uses selling_price directly on batch.
+        if ($rawSp !== null && $rawSp !== '') {
+            $unitPrice    = round((float) $rawSp, 2);
+            $listingPrice = round($unitPrice + max(0, $ownRuleDiscount), 2);
+
+            return $this->response->setJSON([
+                'found'         => true,
+                'product_id'    => $productId,
+                'product_name'  => $product['name'] ?? '',
+                'batch_id'      => (int) $batch['id'],
+                'batch_code'    => $batch['batch_code'] ?? '',
+                'unit_cost'     => $unitCost,
+                'unit_price'    => $unitPrice,
+                'listing_price' => $listingPrice,
+                'remaining_qty' => (int) $batch['remaining_qty'],
+                'rule_name'     => ProductModel::skuIsFoodOrBeverage($sku) ? 'Batch selling price' : 'Own rule',
+                'rule_id'       => 0,
+            ]);
+        }
 
         if (ProductModel::skuIsFoodOrBeverage($sku)) {
-            $rawSp = $batch['selling_price'] ?? null;
-            if ($rawSp !== null && $rawSp !== '') {
-                $unitPrice    = round((float) $rawSp, 2);
-                $listingPrice = $unitPrice;
-
-                return $this->response->setJSON([
-                    'found'         => true,
-                    'product_id'    => $productId,
-                    'product_name'  => $product['name'] ?? '',
-                    'batch_id'      => (int) $batch['id'],
-                    'batch_code'    => $batch['batch_code'] ?? '',
-                    'unit_cost'     => $unitCost,
-                    'unit_price'    => $unitPrice,
-                    'listing_price' => $listingPrice,
-                    'remaining_qty' => (int) $batch['remaining_qty'],
-                    'rule_name'     => 'Batch selling price',
-                    'rule_id'       => 0,
-                ]);
-            }
+            // For BEVE-/FOOD- SKUs, manual selling price is expected; if missing, fallback to procurement rule.
         }
 
         $ruleRow = $this->batchRuleModel

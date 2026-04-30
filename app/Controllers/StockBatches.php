@@ -44,8 +44,9 @@ class StockBatches extends BaseController
         $pr  = $prefix . 'procurement_rules';
 
         $subSelect = "(SELECT {$pr}.name FROM {$bpr} INNER JOIN {$pr} ON {$bpr}.procurement_rule_id = {$pr}.id WHERE {$bpr}.batch_id = {$sb}.id AND {$bpr}.is_active = 1 ORDER BY {$bpr}.id DESC LIMIT 1)";
+        $ruleNameExpr = "COALESCE({$subSelect}, CASE WHEN {$sb}.selling_price IS NOT NULL THEN 'Own rule' ELSE NULL END)";
         $builder = $this->stockBatchModel->builder()
-            ->select("{$sb}.*, {$p}.name AS product_name, {$p}.sku AS product_sku, {$v}.name AS vendor_name, {$subSelect} AS rule_name", false)
+            ->select("{$sb}.*, {$p}.name AS product_name, {$p}.sku AS product_sku, {$v}.name AS vendor_name, {$ruleNameExpr} AS rule_name", false)
             ->join($p, "{$sb}.product_id = {$p}.id", 'left')
             ->join($v, "{$sb}.vendor_id = {$v}.id", 'left');
 
@@ -74,6 +75,27 @@ class StockBatches extends BaseController
             $builder->orderBy("{$sb}.received_at", 'desc');
         }
         $batches = $builder->get()->getResultArray();
+
+        $batches = $this->withGridSellingPrice($batches);
+
+        if ($sortCol === 'selling_price') {
+            usort($batches, static function (array $a, array $b) use ($sortOrder): int {
+                $va = $a['selling_price_display'] ?? null;
+                $vb = $b['selling_price_display'] ?? null;
+                if ($va === null && $vb === null) {
+                    return 0;
+                }
+                if ($va === null) {
+                    return 1;
+                }
+                if ($vb === null) {
+                    return -1;
+                }
+                $cmp = $va <=> $vb;
+
+                return $sortOrder === 'asc' ? $cmp : -$cmp;
+            });
+        }
 
         $data = [
             'pageTitle' => 'Stock Batches - Gameshala ERP',
@@ -152,9 +174,14 @@ class StockBatches extends BaseController
         }
 
         $sku    = (string) ($productRow['sku'] ?? '');
-        $spNorm = $this->normalizedSellingPriceForBatch($sku);
+        $procurementRuleId = (string) $this->request->getPost('procurement_rule_id');
+        $spNorm = $this->normalizedSellingPriceForBatch($sku, $procurementRuleId);
         if (! $spNorm['ok']) {
             return redirect()->back()->withInput()->with('errors', $spNorm['errors']);
+        }
+        $ownDiscNorm = $this->normalizedOwnRuleDiscountForBatch($procurementRuleId);
+        if (! $ownDiscNorm['ok']) {
+            return redirect()->back()->withInput()->with('errors', $ownDiscNorm['errors']);
         }
 
         $data = [
@@ -165,6 +192,7 @@ class StockBatches extends BaseController
             'remaining_qty' => $remaining,
             'unit_cost'     => (float) $this->request->getPost('unit_cost'),
             'selling_price' => $spNorm['value'],
+            'own_rule_discount' => $ownDiscNorm['value'],
             'received_at'   => $receivedAt,
             'remarks'       => $this->request->getPost('remarks') ?: null,
         ];
@@ -176,7 +204,7 @@ class StockBatches extends BaseController
         }
         $id = (int) $id;
         $ruleId = $this->request->getPost('procurement_rule_id');
-        if ($ruleId !== null && $ruleId !== '') {
+        if ($ruleId !== null && $ruleId !== '' && strtolower((string) $ruleId) !== 'own') {
             $ruleId = (int) $ruleId;
             if ($ruleId > 0 && $this->procurementRuleModel->find($ruleId)) {
                 $this->batchRuleModel->insert([
@@ -206,7 +234,14 @@ class StockBatches extends BaseController
         $vendors  = $this->vendorModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
         $rules    = $this->procurementRuleModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
         $currentRule = $this->batchRuleModel->where('batch_id', $id)->where('is_active', 1)->orderBy('id', 'desc')->first();
-        $batch['current_procurement_rule_id'] = $currentRule ? (int) $currentRule['procurement_rule_id'] : null;
+        if ($currentRule) {
+            $batch['current_procurement_rule_id'] = (int) $currentRule['procurement_rule_id'];
+        } elseif (($batch['selling_price'] ?? null) !== null && $batch['selling_price'] !== '') {
+            // Manual pricing without linked procurement rule should appear as Own rule in the form.
+            $batch['current_procurement_rule_id'] = 'own';
+        } else {
+            $batch['current_procurement_rule_id'] = null;
+        }
 
         $data = [
             'pageTitle' => 'Edit Stock Batch - Gameshala ERP',
@@ -272,9 +307,14 @@ class StockBatches extends BaseController
         }
 
         $sku    = (string) ($productRow['sku'] ?? '');
-        $spNorm = $this->normalizedSellingPriceForBatch($sku);
+        $procurementRuleId = (string) $this->request->getPost('procurement_rule_id');
+        $spNorm = $this->normalizedSellingPriceForBatch($sku, $procurementRuleId);
         if (! $spNorm['ok']) {
             return redirect()->back()->withInput()->with('errors', $spNorm['errors']);
+        }
+        $ownDiscNorm = $this->normalizedOwnRuleDiscountForBatch($procurementRuleId);
+        if (! $ownDiscNorm['ok']) {
+            return redirect()->back()->withInput()->with('errors', $ownDiscNorm['errors']);
         }
 
         $data = [
@@ -285,14 +325,17 @@ class StockBatches extends BaseController
             'remaining_qty' => $remaining,
             'unit_cost'     => (float) $this->request->getPost('unit_cost'),
             'selling_price' => $spNorm['value'],
+            'own_rule_discount' => $ownDiscNorm['value'],
             'received_at'   => $receivedAt,
             'remarks'       => $this->request->getPost('remarks') ?: null,
         ];
 
         $this->stockBatchModel->update($id, $data);
 
-        $newRuleId = $this->request->getPost('procurement_rule_id');
-        $newRuleId = ($newRuleId !== null && $newRuleId !== '') ? (int) $newRuleId : null;
+        $newRuleIdRaw = $this->request->getPost('procurement_rule_id');
+        $newRuleId = ($newRuleIdRaw !== null && $newRuleIdRaw !== '' && strtolower((string) $newRuleIdRaw) !== 'own')
+            ? (int) $newRuleIdRaw
+            : null;
         $oldRule   = $this->batchRuleModel->where('batch_id', $id)->where('is_active', 1)->orderBy('id', 'desc')->first();
         $oldRuleId = $oldRule ? (int) $oldRule['procurement_rule_id'] : null;
         if ($newRuleId !== $oldRuleId) {
@@ -326,15 +369,18 @@ class StockBatches extends BaseController
     /**
      * @return array{ok: true, value: float|null}|array{ok: false, errors: array<string, string>}
      */
-    protected function normalizedSellingPriceForBatch(string $sku): array
+    protected function normalizedSellingPriceForBatch(string $sku, string $procurementRuleId = ''): array
     {
         $post = $this->request->getPost('selling_price');
         $isFb = ProductModel::skuIsFoodOrBeverage($sku);
-        if ($isFb) {
+        $isOwnRule = strtolower(trim($procurementRuleId)) === 'own';
+        if ($isFb || $isOwnRule) {
             if ($post === null || trim((string) $post) === '') {
                 return [
                     'ok'     => false,
-                    'errors' => ['selling_price' => 'Selling price is required for SKUs starting with BEVE- or FOOD-.'],
+                    'errors' => ['selling_price' => $isOwnRule
+                        ? 'Selling price is required when procurement rule is Own rule.'
+                        : 'Selling price is required for SKUs starting with BEVE- or FOOD-.'],
                 ];
             }
             if (! is_numeric($post)) {
@@ -361,5 +407,145 @@ class StockBatches extends BaseController
         }
 
         return ['ok' => true, 'value' => null];
+    }
+
+    /**
+     * @return array{ok: true, value: float|null}|array{ok: false, errors: array<string, string>}
+     */
+    protected function normalizedOwnRuleDiscountForBatch(string $procurementRuleId = ''): array
+    {
+        $isOwnRule = strtolower(trim($procurementRuleId)) === 'own';
+        $post = $this->request->getPost('own_rule_discount');
+        if (! $isOwnRule) {
+            return ['ok' => true, 'value' => null];
+        }
+        if ($post === null || trim((string) $post) === '') {
+            return [
+                'ok'     => false,
+                'errors' => ['own_rule_discount' => 'Own rule discount is required when procurement rule is Own rule.'],
+            ];
+        }
+        if (! is_numeric($post)) {
+            return [
+                'ok'     => false,
+                'errors' => ['own_rule_discount' => 'Enter a valid own rule discount amount.'],
+            ];
+        }
+        $v = round((float) $post, 2);
+        if ($v < 0) {
+            return [
+                'ok'     => false,
+                'errors' => ['own_rule_discount' => 'Own rule discount cannot be negative.'],
+            ];
+        }
+
+        return ['ok' => true, 'value' => $v];
+    }
+
+    /**
+     * Adds selling_price_display for list grid: procurement-rule batches use unit_cost + rule profit;
+     * Own rule and BEVE/FOOD manual selling_price paths stay unchanged (stored column).
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    protected function withGridSellingPrice(array $rows): array
+    {
+        if ($rows === []) {
+            return $rows;
+        }
+
+        $batchIds = array_values(array_unique(array_map(static fn (array $r): int => (int) ($r['id'] ?? 0), $rows)));
+        $batchIds = array_filter($batchIds, static fn (int $id): bool => $id > 0);
+
+        $ruleLinkByBatch = [];
+        if ($batchIds !== []) {
+            $links = $this->batchRuleModel
+                ->whereIn('batch_id', $batchIds)
+                ->where('is_active', 1)
+                ->orderBy('id', 'desc')
+                ->findAll();
+            foreach ($links as $link) {
+                $bid = (int) $link['batch_id'];
+                if (! isset($ruleLinkByBatch[$bid])) {
+                    $ruleLinkByBatch[$bid] = $link;
+                }
+            }
+        }
+
+        $ruleIds = [];
+        foreach ($ruleLinkByBatch as $link) {
+            $rid = (int) ($link['procurement_rule_id'] ?? 0);
+            if ($rid > 0) {
+                $ruleIds[] = $rid;
+            }
+        }
+        $ruleIds = array_unique($ruleIds);
+        $rulesById = [];
+        if ($ruleIds !== []) {
+            foreach ($this->procurementRuleModel->whereIn('id', $ruleIds)->findAll() as $rule) {
+                $rulesById[(int) $rule['id']] = $rule;
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $row['selling_price_display'] = $this->gridSellingPriceForRow($row, $ruleLinkByBatch, $rulesById);
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param array<int, array<string, mixed>> $ruleLinkByBatch
+     * @param array<int, array<string, mixed>> $rulesById
+     */
+    protected function gridSellingPriceForRow(array $row, array $ruleLinkByBatch, array $rulesById): ?float
+    {
+        $sku = (string) ($row['product_sku'] ?? '');
+        $unitCost = (float) ($row['unit_cost'] ?? 0);
+        $storedRaw = $row['selling_price'] ?? null;
+        $hasStored = $storedRaw !== null && $storedRaw !== '';
+        $stored = $hasStored ? round((float) $storedRaw, 2) : null;
+
+        $ruleName = (string) ($row['rule_name'] ?? '');
+
+        if (ProductModel::skuIsFoodOrBeverage($sku) && $hasStored) {
+            return $stored;
+        }
+
+        if ($ruleName === 'Own rule') {
+            return $stored;
+        }
+
+        $batchId = (int) ($row['id'] ?? 0);
+        $link = $ruleLinkByBatch[$batchId] ?? null;
+        if ($link !== null) {
+            $rid = (int) ($link['procurement_rule_id'] ?? 0);
+            $rule = $rulesById[$rid] ?? null;
+            if ($rule !== null) {
+                return $this->computeSellingPriceFromProcurementRule($unitCost, $rule);
+            }
+        }
+
+        return $stored;
+    }
+
+    /**
+     * Same formula as Orders::computeSellingPrice (unit_cost + profit flat or %).
+     *
+     * @param array<string, mixed> $rule
+     */
+    protected function computeSellingPriceFromProcurementRule(float $unitCost, array $rule): float
+    {
+        $profitType  = $rule['profit_type'] ?? 'FLAT';
+        $profitValue = (float) ($rule['profit_value'] ?? 0);
+        $profitAmount = $profitType === 'PERCENTAGE'
+            ? $unitCost * ($profitValue / 100)
+            : $profitValue;
+        $sellingPrice = $unitCost + $profitAmount;
+
+        return round(max(0, $sellingPrice), 2);
     }
 }

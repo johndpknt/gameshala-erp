@@ -74,7 +74,7 @@
                             <td class="text-end"><?= (int) $b['remaining_qty'] ?></td>
                             <td class="text-end"><?= esc(number_format((float) ($b['unit_cost'] ?? 0), 2)) ?></td>
                             <td class="text-end"><?php
-                                $sp = $b['selling_price'] ?? null;
+                                $sp = $b['selling_price_display'] ?? null;
                                 echo ($sp !== null && $sp !== '') ? esc(number_format((float) $sp, 2)) : '—';
                             ?></td>
                             <td><?= esc(date('M j, Y', strtotime($b['received_at']))) ?></td>
