@@ -26,9 +26,9 @@ class Database extends Config
      */
     public array $default = [
         'DSN'          => '',
-        'hostname'     => 'localhost',
-        'username'     => 'vespqxhp_gs_erp_v1',
-        'password'     => 'RZ4M~~BS3Btz^R1;',
+        'hostname'     => '127.0.0.1',
+        'username'     => 'root',
+        'password'     => '',
         'database'     => 'vespqxhp_gs_erp_v1',
         'DBDriver'     => 'MySQLi',
         'DBPrefix'     => '',
