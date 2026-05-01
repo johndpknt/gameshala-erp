@@ -34,7 +34,8 @@ class StockBatches extends BaseController
         helper('form');
         $q = $this->request->getGet('q');
         $tab = strtolower(trim((string) $this->request->getGet('tab')));
-        $activeTab = $tab === 'beverage' ? 'beverage' : 'regular';
+        $allowedTabs = ['all', 'toy', 'electronic', 'drone', 'beverage'];
+        $activeTab = in_array($tab, $allowedTabs, true) ? $tab : 'all';
         $db = $this->stockBatchModel->db;
         $prefix = $db->DBPrefix;
         $sb  = $prefix . 'stock_batches';
@@ -50,10 +51,14 @@ class StockBatches extends BaseController
             ->join($p, "{$sb}.product_id = {$p}.id", 'left')
             ->join($v, "{$sb}.vendor_id = {$v}.id", 'left');
 
-        if ($activeTab === 'beverage') {
+        if ($activeTab === 'toy') {
+            $builder->where("{$p}.sku LIKE 'TY-%'", null, false);
+        } elseif ($activeTab === 'electronic') {
+            $builder->where("{$p}.sku LIKE 'ELC-%'", null, false);
+        } elseif ($activeTab === 'drone') {
+            $builder->where("{$p}.sku LIKE 'DRN-%'", null, false);
+        } elseif ($activeTab === 'beverage') {
             $builder->where("({$p}.sku LIKE 'BEVE-%' OR {$p}.sku LIKE 'FOOD-%')", null, false);
-        } else {
-            $builder->where("(COALESCE({$p}.sku, '') NOT LIKE 'BEVE-%' AND COALESCE({$p}.sku, '') NOT LIKE 'FOOD-%')", null, false);
         }
 
         if ($q !== null && $q !== '') {

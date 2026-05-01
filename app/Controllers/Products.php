@@ -20,13 +20,28 @@ class Products extends BaseController
      */
     public function index(): string
     {
+        $tab = strtolower(trim((string) $this->request->getGet('tab')));
+        $allowedTabs = ['toy', 'electronic', 'drone', 'beverage'];
+        $activeTab = in_array($tab, $allowedTabs, true) ? $tab : 'toy';
+
+        return $this->renderCategoryList($activeTab, base_url('catalog/products'));
+    }
+
+    /**
+     * List only FOOD-/BEVE- catalog products.
+     */
+    public function beverage(): string
+    {
+        return $this->renderCategoryList('beverage', base_url('catalog/beverage'));
+    }
+
+    protected function renderCategoryList(string $activeTab, string $listBase): string
+    {
         helper(['form', 'text']);
         $q = $this->request->getGet('q');
         $builder = $this->productModel->builder();
 
-        // Keep FOOD-/BEVE- products in the dedicated /catalog/beverage page.
-        $builder->notLike('sku', 'FOOD-', 'after')
-            ->notLike('sku', 'BEVE-', 'after');
+        $this->applySkuFilterForTab($builder, $activeTab);
 
         if ($q !== null && $q !== '') {
             $builder->groupStart()
@@ -51,12 +66,23 @@ class Products extends BaseController
         }
         unset($p);
 
+        $headingMap = [
+            'toy'        => 'Toys Catalog',
+            'electronic' => 'Electronic Catalog',
+            'drone'      => 'Drone Catalog',
+            'beverage'   => 'Beverage Catalog',
+        ];
+        $pageHeading = $headingMap[$activeTab] ?? 'Products';
+
         $data = [
-            'pageTitle' => 'Products - Gameshala ERP',
-            'products'  => $products,
-            'searchQ'   => $q ?? '',
-            'sort'      => $sortCol ?? 'name',
-            'order'     => $sortCol !== null && in_array($sortCol, $allowedSort, true) ? $sortOrder : 'asc',
+            'pageTitle'   => $pageHeading . ' - Gameshala ERP',
+            'pageHeading' => $pageHeading,
+            'products'    => $products,
+            'searchQ'     => $q ?? '',
+            'sort'        => $sortCol ?? 'name',
+            'order'       => $sortCol !== null && in_array($sortCol, $allowedSort, true) ? $sortOrder : 'asc',
+            'listBase'    => $listBase,
+            'activeTab'   => $activeTab,
         ];
 
         return view('layout/main', [
@@ -65,57 +91,25 @@ class Products extends BaseController
         ]);
     }
 
-    /**
-     * List only FOOD-/BEVE- catalog products.
-     */
-    public function beverage(): string
+    protected function applySkuFilterForTab(\CodeIgniter\Database\BaseBuilder $builder, string $tab): void
     {
-        helper(['form', 'text']);
-        $q = $this->request->getGet('q');
-        $builder = $this->productModel->builder();
+        if ($tab === 'toy') {
+            $builder->like('sku', 'TY-', 'after');
+            return;
+        }
+        if ($tab === 'electronic') {
+            $builder->like('sku', 'ELC-', 'after');
+            return;
+        }
+        if ($tab === 'drone') {
+            $builder->like('sku', 'DRN-', 'after');
+            return;
+        }
 
         $builder->groupStart()
             ->like('sku', 'FOOD-', 'after')
             ->orLike('sku', 'BEVE-', 'after')
             ->groupEnd();
-
-        if ($q !== null && $q !== '') {
-            $builder->groupStart()
-                ->like('name', $q)
-                ->orLike('sku', $q)
-                ->orLike('slug', $q)
-                ->orLike('description', $q)
-                ->groupEnd();
-        }
-
-        $sortCol  = $this->request->getGet('sort');
-        $sortOrder = strtolower((string) $this->request->getGet('order')) === 'desc' ? 'desc' : 'asc';
-        $allowedSort = ['name', 'sku', 'slug', 'unit', 'is_public', 'is_active'];
-        if ($sortCol !== null && in_array($sortCol, $allowedSort, true)) {
-            $builder->orderBy($sortCol, $sortOrder);
-        } else {
-            $builder->orderBy('name', 'asc');
-        }
-        $products = $builder->get()->getResultArray();
-        foreach ($products as &$p) {
-            $p['image_urls'] = ProductModel::imageUrlToArray($p['image_url'] ?? null);
-        }
-        unset($p);
-
-        $data = [
-            'pageTitle'   => 'Beverage Catalog - Gameshala ERP',
-            'pageHeading' => 'Beverage Catalog',
-            'products'    => $products,
-            'searchQ'     => $q ?? '',
-            'sort'        => $sortCol ?? 'name',
-            'order'       => $sortCol !== null && in_array($sortCol, $allowedSort, true) ? $sortOrder : 'asc',
-            'listBase'    => base_url('catalog/beverage'),
-        ];
-
-        return view('layout/main', [
-            'pageTitle' => $data['pageTitle'],
-            'content'   => view('catalog/products/index', $data),
-        ]);
     }
 
     /**

@@ -14,6 +14,9 @@
                         <a class="nav-link dropdown-toggle" href="<?= base_url('catalog') ?>" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-collection nav-icon me-1"></i>Catalog</a>
                         <ul class="dropdown-menu dropdown-menu-dark">
                             <li><a class="dropdown-item" href="<?= base_url('catalog/products') ?>"><i class="bi bi-box-seam me-2"></i>Products</a></li>
+                            <li><a class="dropdown-item" href="<?= base_url('catalog/products?tab=toy') ?>"><i class="bi bi-puzzle me-2"></i>Toys</a></li>
+                            <li><a class="dropdown-item" href="<?= base_url('catalog/products?tab=electronic') ?>"><i class="bi bi-cpu me-2"></i>Electronic</a></li>
+                            <li><a class="dropdown-item" href="<?= base_url('catalog/products?tab=drone') ?>"><i class="bi bi-airplane me-2"></i>Drone</a></li>
                             <li><a class="dropdown-item" href="<?= base_url('catalog/beverage') ?>"><i class="bi bi-cup-straw me-2"></i>Beverage</a></li>
                             <li><a class="dropdown-item" href="<?= base_url('catalog/coupons') ?>"><i class="bi bi-tag me-2"></i>Coupons</a></li>
                             <?php if (is_admin()): ?>

@@ -8,16 +8,32 @@
 
     <?php
     $productBase = $listBase ?? base_url('catalog/products');
-    $productSortUrl = function ($col) use ($productBase, $searchQ, $sort, $order) {
+    $activeTab = $activeTab ?? 'toy';
+    $productSortUrl = function ($col) use ($productBase, $searchQ, $sort, $order, $activeTab) {
         $next = ($sort === $col && $order === 'asc') ? 'desc' : 'asc';
-        return $productBase . '?' . http_build_query(array_filter(['q' => $searchQ, 'sort' => $col, 'order' => $next]));
+        return $productBase . '?' . http_build_query(array_filter(['tab' => $activeTab, 'q' => $searchQ, 'sort' => $col, 'order' => $next]));
     };
     $productArrow = function ($col) use ($sort, $order) {
         if ($sort !== $col) return '';
         return $order === 'asc' ? ' ↑' : ' ↓';
     };
     ?>
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'toy' ? 'active' : '' ?>" href="<?= base_url('catalog/products?tab=toy') ?>">Toys</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'electronic' ? 'active' : '' ?>" href="<?= base_url('catalog/products?tab=electronic') ?>">Electronic</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'drone' ? 'active' : '' ?>" href="<?= base_url('catalog/products?tab=drone') ?>">Drone</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'beverage' ? 'active' : '' ?>" href="<?= base_url('catalog/products?tab=beverage') ?>">Beverage</a>
+        </li>
+    </ul>
     <form method="get" action="<?= esc($productBase) ?>" class="mb-4">
+        <input type="hidden" name="tab" value="<?= esc($activeTab) ?>">
         <div class="input-group" style="max-width: 400px;">
             <input type="search" name="q" class="form-control" placeholder="Search by name, SKU, slug, description..."
                    value="<?= esc($searchQ) ?>">

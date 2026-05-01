@@ -6,7 +6,8 @@
 
     <?php
     $batchBase = base_url('inventory/stock-batches');
-    $activeTab = ($activeTab ?? 'regular') === 'beverage' ? 'beverage' : 'regular';
+    $allowedTabs = ['all', 'toy', 'electronic', 'drone', 'beverage'];
+    $activeTab = in_array(($activeTab ?? 'all'), $allowedTabs, true) ? $activeTab : 'all';
     $batchSortUrl = function ($col) use ($batchBase, $searchQ, $sort, $order, $activeTab) {
         $next = ($sort === $col && $order === 'asc') ? 'desc' : 'asc';
         return $batchBase . '?' . http_build_query(array_filter(['tab' => $activeTab, 'q' => $searchQ, 'sort' => $col, 'order' => $next]));
@@ -18,10 +19,19 @@
     ?>
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
-            <a class="nav-link <?= $activeTab === 'regular' ? 'active' : '' ?>" href="<?= $batchBase ?>">Stock Batches</a>
+            <a class="nav-link <?= $activeTab === 'all' ? 'active' : '' ?>" href="<?= $batchBase ?>">All</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link <?= $activeTab === 'beverage' ? 'active' : '' ?>" href="<?= $batchBase . '?tab=beverage' ?>">Stock Batches Beverage</a>
+            <a class="nav-link <?= $activeTab === 'toy' ? 'active' : '' ?>" href="<?= $batchBase . '?tab=toy' ?>">TY</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'electronic' ? 'active' : '' ?>" href="<?= $batchBase . '?tab=electronic' ?>">ELC</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'drone' ? 'active' : '' ?>" href="<?= $batchBase . '?tab=drone' ?>">DRN</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'beverage' ? 'active' : '' ?>" href="<?= $batchBase . '?tab=beverage' ?>">Beverage</a>
         </li>
     </ul>
 
