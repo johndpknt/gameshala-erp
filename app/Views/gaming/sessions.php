@@ -301,29 +301,43 @@ if (! function_exists('gaming_visit_unix')) {
                 <input type="hidden" name="food_beverage_item_id" id="addFoodItemId" value="">
                 <input type="hidden" name="product_id" id="addFoodProductId" value="">
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="addFoodSearch" class="form-label">Beverage &amp; Food (own)</label>
-                        <p class="text-muted small mb-2 mb-md-1">In-house menu from Gaming → Food &amp; beverages.</p>
-                        <input type="text" class="form-control" id="addFoodSearch" placeholder="Search by name..." autocomplete="off">
-                        <div id="addFoodResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
-                        <div id="addFoodSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
+                    <ul class="nav nav-tabs mb-3" id="addFoodTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="add-food-tab-own" data-bs-toggle="tab" data-bs-target="#add-food-pane-own" type="button" role="tab" aria-controls="add-food-pane-own" aria-selected="true">Beverage &amp; Food (own)</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="add-food-tab-vendor" data-bs-toggle="tab" data-bs-target="#add-food-pane-vendor" type="button" role="tab" aria-controls="add-food-pane-vendor" aria-selected="false">Beverage &amp; Food (from vendor)</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="addFoodTabContent">
+                        <div class="tab-pane fade show active" id="add-food-pane-own" role="tabpanel" aria-labelledby="add-food-tab-own" tabindex="0">
+                            <div class="mb-3">
+                                <label for="addFoodSearch" class="form-label">Search</label>
+                                <p class="text-muted small mb-2 mb-md-1">In-house menu from Gaming → Food &amp; beverages.</p>
+                                <input type="text" class="form-control" id="addFoodSearch" placeholder="Search by name..." autocomplete="off">
+                                <div id="addFoodResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
+                                <div id="addFoodSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
+                            </div>
+                            <div class="mb-0">
+                                <label for="addFoodQtyOwn" class="form-label">Quantity</label>
+                                <input type="number" class="form-control" id="addFoodQtyOwn" name="quantity_own" value="1" min="1">
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="add-food-pane-vendor" role="tabpanel" aria-labelledby="add-food-tab-vendor" tabindex="0">
+                            <div class="mb-3">
+                                <label for="addVendorProductSearch" class="form-label">Search</label>
+                                <p class="text-muted small mb-2 mb-md-1">Catalog <code class="small">FOOD-</code> / <code class="small">BEVE-</code> products (same as <code class="small">api/products?per_page=beve&amp;food=</code>). Stock and price are enforced when you add.</p>
+                                <input type="text" class="form-control" id="addVendorProductSearch" placeholder="Search by name or SKU..." autocomplete="off" maxlength="120">
+                                <div id="addVendorProductResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
+                                <div id="addVendorProductSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
+                            </div>
+                            <div class="mb-0">
+                                <label for="addFoodQtyVendor" class="form-label">Quantity</label>
+                                <input type="number" class="form-control" id="addFoodQtyVendor" name="quantity_vendor" value="1" min="1">
+                            </div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="addFoodQtyOwn" class="form-label">Quantity (own)</label>
-                        <input type="number" class="form-control" id="addFoodQtyOwn" name="quantity_own" value="1" min="1">
-                    </div>
-                    <div class="mb-2 pt-2 border-top">
-                        <label for="addVendorProductSearch" class="form-label">Beverage &amp; Food (from vendor)</label>
-                        <p class="text-muted small mb-2 mb-md-1">Catalog <code class="small">FOOD-</code> / <code class="small">BEVE-</code> products (same as <code class="small">api/products?per_page=beve&amp;food=</code>). Stock and price are enforced when you add.</p>
-                        <input type="text" class="form-control" id="addVendorProductSearch" placeholder="Search by name or SKU..." autocomplete="off" maxlength="120">
-                        <div id="addVendorProductResults" class="list-group mt-1 border rounded" style="max-height: 180px; overflow-y: auto; display: none;"></div>
-                        <div id="addVendorProductSelected" class="mt-2 py-2 px-2 rounded bg-success bg-opacity-10 text-success small" style="display: none;"></div>
-                    </div>
-                    <div class="mb-2">
-                        <label for="addFoodQtyVendor" class="form-label">Quantity (from vendor)</label>
-                        <input type="number" class="form-control" id="addFoodQtyVendor" name="quantity_vendor" value="1" min="1">
-                    </div>
-                    <div id="addFoodItemError" class="text-danger small" style="display: none;"></div>
+                    <div id="addFoodItemError" class="text-danger small mt-2" style="display: none;"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -553,6 +567,7 @@ if (! function_exists('gaming_visit_unix')) {
     var addVendorProductSelected = document.getElementById('addVendorProductSelected');
     var addFoodItemError = document.getElementById('addFoodItemError');
     var vendorSearchTimeout = null;
+    var addFoodTabOwnBtn = document.getElementById('add-food-tab-own');
 
     function clearOwnFoodSelection() {
         if (addFoodItemId) addFoodItemId.value = '';
@@ -584,6 +599,9 @@ if (! function_exists('gaming_visit_unix')) {
             document.getElementById('addFoodVisitId').value = visitId;
             document.getElementById('addFoodModalLabel').textContent = 'Add food / beverage — Session #' + visitId;
             resetAddFoodModalFields();
+            if (addFoodTabOwnBtn && typeof bootstrap !== 'undefined') {
+                bootstrap.Tab.getOrCreateInstance(addFoodTabOwnBtn).show();
+            }
             new bootstrap.Modal(addFoodModal).show();
         });
     });

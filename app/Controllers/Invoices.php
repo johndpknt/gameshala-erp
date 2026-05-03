@@ -125,12 +125,13 @@ class Invoices extends BaseController
                 $items[] = ['description' => 'Gaming - ' . $catName . ' / ' . $modeName, 'qty' => 1, 'unit_price' => $gamingAmount, 'line_total' => $gamingAmount, 'product_name' => null, 'sku' => null];
             }
             foreach ($foodRows as $row) {
+                $label = self::cleanInvoiceFoodLineDescription($row);
                 $items[] = [
-                    'description'  => $row['item_name'] ?? 'Food item',
+                    'description'  => $label,
                     'qty'          => (int) $row['quantity'],
                     'unit_price'   => (float) $row['line_total'] / max(1, (int) $row['quantity']),
                     'line_total'   => (float) $row['line_total'],
-                    'product_name' => $row['item_name'] ?? null,
+                    'product_name' => $label,
                     'sku'          => ! empty($row['product_sku']) ? (string) $row['product_sku'] : null,
                 ];
             }
@@ -151,16 +152,66 @@ class Invoices extends BaseController
 
         $company = config('Company');
 
+        $customerName  = trim((string) ($customer['name'] ?? ''));
+        $invNo         = (string) ($invoice['invoice_number'] ?? '');
+        $companyName   = is_object($company) ? (string) ($company->name ?? 'Gameshaala') : 'Gameshaala';
+        $invoiceUrl    = base_url('sales/invoices/view/' . $id);
+        $totalStr      = number_format((float) ($invoice['total_amount'] ?? 0), 2);
+        $shareBody     = 'Hi ' . ($customerName !== '' ? $customerName : 'there') . ",\n\n"
+            . 'Your invoice ' . $invNo . ' from ' . $companyName . " is ready.\n"
+            . 'Amount: ₹' . $totalStr . "\n\n"
+            . 'View or print: ' . $invoiceUrl . "\n\n"
+            . 'Thank you.';
+
+        $waPhone = CustomerModel::whatsappDialNumber($customer['phone'] ?? null);
+        $shareWhatsappUrl = $waPhone !== null
+            ? 'https://wa.me/' . $waPhone . '?text=' . rawurlencode($shareBody)
+            : null;
+
+        $customerEmail = trim((string) ($customer['email'] ?? ''));
+        $shareEmailUrl = $customerEmail !== ''
+            ? 'mailto:' . $customerEmail
+                . '?subject=' . rawurlencode('Invoice ' . $invNo . ' — ' . $companyName)
+                . '&body=' . rawurlencode($shareBody)
+            : null;
+
         $data = [
-            'invoice'   => $invoice,
-            'order'     => $order,
-            'customer'  => $customer,
-            'items'     => $items,
-            'coupon'    => $coupon,
-            'company'   => $company,
-            'isGaming'  => $isGaming,
+            'invoice'           => $invoice,
+            'order'             => $order,
+            'customer'          => $customer,
+            'items'             => $items,
+            'coupon'            => $coupon,
+            'company'           => $company,
+            'isGaming'          => $isGaming,
+            'shareWhatsappUrl'  => $shareWhatsappUrl,
+            'shareEmailUrl'     => $shareEmailUrl,
         ];
 
         return view('sales/invoices/print', $data);
+    }
+
+    /**
+     * Customer-facing label for gaming F&B lines: use catalog product name when present;
+     * otherwise strip synthetic "[Catalog] … (#id)" from legacy food_beverage_rows.
+     *
+     * @param array<string, mixed> $row Joined gaming_visit_food_items row
+     */
+    protected static function cleanInvoiceFoodLineDescription(array $row): string
+    {
+        $productName = isset($row['product_name']) ? trim((string) $row['product_name']) : '';
+        if ($productName !== '') {
+            return $productName;
+        }
+
+        $name = trim((string) ($row['item_name'] ?? ''));
+        if ($name === '') {
+            return 'Food item';
+        }
+
+        $name = (string) preg_replace('/^\[Catalog\]\s+/u', '', $name);
+        $name = (string) preg_replace('/\s*\(#\d+\)\s*$/u', '', $name);
+        $name = trim($name);
+
+        return $name !== '' ? $name : 'Food item';
     }
 }

@@ -553,4 +553,35 @@ class StockBatches extends BaseController
 
         return round(max(0, $sellingPrice), 2);
     }
+
+    /**
+     * Remove one stock batch record (admin). Procurement-rule links cascade; sale/order
+     * lines keep history with stock_batch_id set to NULL per FK rules.
+     */
+    public function delete(int $id): RedirectResponse
+    {
+        $batch = $this->stockBatchModel->find($id);
+        if (! $batch) {
+            return redirect()->to('inventory/stock-batches')->with('error', 'Stock batch not found.');
+        }
+
+        $code = (string) ($batch['batch_code'] ?? '#' . $id);
+
+        try {
+            if (! $this->stockBatchModel->delete($id)) {
+                return redirect()->back()->with('error', 'Could not delete stock batch.');
+            }
+        } catch (\Throwable $e) {
+            log_message('error', '[StockBatches::delete] ' . $e->getMessage());
+
+            return redirect()->back()->with(
+                'error',
+                'Could not delete this batch (database constraint). If sales history references it, contact support or archive instead.'
+            );
+        }
+
+        $this->logActivity('inventory', 'stock_batch_delete', $id, 'Deleted stock batch: ' . $code);
+
+        return redirect()->to('inventory/stock-batches')->with('message', 'Stock batch deleted: ' . $code);
+    }
 }

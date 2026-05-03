@@ -21,8 +21,8 @@ class Products extends BaseController
     public function index(): string
     {
         $tab = strtolower(trim((string) $this->request->getGet('tab')));
-        $allowedTabs = ['toy', 'electronic', 'drone', 'beverage'];
-        $activeTab = in_array($tab, $allowedTabs, true) ? $tab : 'toy';
+        $allowedTabs = ['all', 'toy', 'electronic', 'drone', 'beverage'];
+        $activeTab = in_array($tab, $allowedTabs, true) ? $tab : 'all';
 
         return $this->renderCategoryList($activeTab, base_url('catalog/products'));
     }
@@ -67,6 +67,7 @@ class Products extends BaseController
         unset($p);
 
         $headingMap = [
+            'all'        => 'All products',
             'toy'        => 'Toys Catalog',
             'electronic' => 'Electronic Catalog',
             'drone'      => 'Drone Catalog',
@@ -93,6 +94,9 @@ class Products extends BaseController
 
     protected function applySkuFilterForTab(\CodeIgniter\Database\BaseBuilder $builder, string $tab): void
     {
+        if ($tab === 'all') {
+            return;
+        }
         if ($tab === 'toy') {
             $builder->like('sku', 'TY-', 'after');
             return;

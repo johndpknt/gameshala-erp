@@ -54,6 +54,23 @@ class CustomerModel extends Model
     }
 
     /**
+     * Digits-only number for https://wa.me/… (international, no + prefix).
+     * 10-digit mobiles default to India (91); longer digit strings are passed through.
+     */
+    public static function whatsappDialNumber(?string $phone): ?string
+    {
+        $d = preg_replace('/\D+/', '', (string) $phone);
+        if ($d === '') {
+            return null;
+        }
+        if (strlen($d) === 10) {
+            return '91' . $d;
+        }
+
+        return $d;
+    }
+
+    /**
      * First active customer whose phone matches $phone (same comparable key), or null.
      */
     public function findActiveByPhoneComparable(string $phone): ?array

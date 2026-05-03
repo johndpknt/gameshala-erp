@@ -34,12 +34,35 @@
         .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 11px; color: #666; }
         .footer p { margin: 0 0 4px 0; }
         .payment-terms { margin-top: 16px; }
+        .invoice-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+        .invoice-actions a.btn-share { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: 600; border: none; cursor: pointer; }
+        .invoice-actions a.btn-wa { background: #25D366; color: #fff !important; }
+        .invoice-actions a.btn-wa:hover { filter: brightness(0.95); }
+        .invoice-actions a.btn-email { background: #6c757d; color: #fff !important; }
+        .invoice-actions a.btn-email:hover { filter: brightness(0.95); }
+        .invoice-actions .btn-share[disabled], .invoice-actions span.btn-share-muted { opacity: 0.55; cursor: not-allowed; pointer-events: none; padding: 8px 14px; font-size: 13px; border-radius: 4px; background: #e9ecef; color: #666; }
     </style>
 </head>
 <body>
     <div class="no-print">
-        <a href="<?= base_url('sales/invoices') ?>" style="margin-right:12px;">← Back to Invoices</a>
-        <button type="button" onclick="window.print();" style="padding:8px 16px;cursor:pointer;background:#0d6efd;color:#fff;border:none;border-radius:4px;">Print / Save as PDF</button>
+        <div class="invoice-actions">
+            <a href="<?= base_url('sales/invoices') ?>">← Back to Invoices</a>
+            <button type="button" onclick="window.print();" style="padding:8px 16px;cursor:pointer;background:#0d6efd;color:#fff;border:none;border-radius:4px;">Print / Save as PDF</button>
+            <?php
+            $shareWa   = $shareWhatsappUrl ?? null;
+            $shareMail = $shareEmailUrl ?? null;
+            ?>
+            <?php if ($shareWa): ?>
+                <a href="<?= esc($shareWa, 'attr') ?>" class="btn-share btn-wa" target="_blank" rel="noopener noreferrer" title="Send invoice link via WhatsApp">WhatsApp</a>
+            <?php else: ?>
+                <span class="btn-share-muted" title="Add customer phone to enable WhatsApp">WhatsApp</span>
+            <?php endif; ?>
+            <?php if ($shareMail): ?>
+                <a href="<?= esc($shareMail, 'attr') ?>" class="btn-share btn-email" title="Send invoice link by email">Email</a>
+            <?php else: ?>
+                <span class="btn-share-muted" title="Add customer email to enable">Email</span>
+            <?php endif; ?>
+        </div>
     </div>
 
     <div class="invoice-header">

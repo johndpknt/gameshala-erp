@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\GamingCatalogStockService;
 use App\Libraries\ProductCatalogPrice;
 use App\Models\CustomerModel;
 use App\Models\FoodBeverageItemModel;
@@ -13,6 +14,7 @@ use App\Models\GamingTitleModel;
 use App\Models\GamingVisitFoodItemModel;
 use App\Models\GamingVisitModel;
 use App\Models\InvoiceModel;
+use CodeIgniter\Database\BaseConnection;
 use CodeIgniter\HTTP\RedirectResponse;
 use CodeIgniter\HTTP\ResponseInterface;
 use CodeIgniter\I18n\Time;
@@ -439,7 +441,10 @@ class Gaming extends BaseController
     public function foodBeverages(): string
     {
         helper('form');
-        $items = $this->foodBeverageItemModel->orderBy('name', 'asc')->findAll();
+        // Synthetic rows for legacy DB (food_beverage_item_id NOT NULL) — not "own menu"; catalog lives under Catalog.
+        $items = $this->foodBeverageItemModel->notLike('name', '[Catalog]', 'after')
+            ->orderBy('name', 'asc')
+            ->findAll();
 
         return view('layout/main', [
             'pageTitle' => 'Food & Beverages - Gaming',
@@ -538,7 +543,10 @@ class Gaming extends BaseController
             ->get()
             ->getResultArray();
 
-        $foodItems   = $this->foodBeverageItemModel->where('is_active', 1)->orderBy('name', 'asc')->findAll();
+        $foodItems = $this->foodBeverageItemModel->where('is_active', 1)
+            ->notLike('name', '[Catalog]', 'after')
+            ->orderBy('name', 'asc')
+            ->findAll();
         $priceRules  = $this->priceRuleModel->where('is_active', 1)->orderBy('id', 'asc')->findAll();
         $rulesWithNames = [];
         foreach ($priceRules as $r) {
@@ -684,25 +692,92 @@ class Gaming extends BaseController
                 'quantity'              => $qtyVendor,
                 'line_total'            => $lineTotal,
             ];
+            /** @var BaseConnection $db */
+            $db = $this->visitModel->db;
+            // Models bound to this connection so inserts + stock run in one transaction.
+            $visitFoodDb = new GamingVisitFoodItemModel($db);
+            $foodBevDb   = new FoodBeverageItemModel($db);
+
+            // Two-phase commit: session line first, then FIFO stock. Same DB connection for both.
+            // One big transaction mixing gvfi + stock_movements has caused transStatus failures on some
+            // hosts even when the INSERT works alone in phpMyAdmin.
+
+            $db->transStart();
             try {
-                $this->visitFoodModel->insert($vendorLine);
+                try {
+                    if ($visitFoodDb->insert($vendorLine) === false) {
+                        throw new \RuntimeException('__catalog_visit_food_insert__');
+                    }
+                } catch (\Throwable $e) {
+                    // First INSERT may have failed under strict trans mode and left transStatus false even though we recover.
+                    $db->resetTransStatus();
+                    // Backward-compatible fallback for environments where food_beverage_item_id is still NOT NULL.
+                    $fallbackItemId = $this->resolveCatalogFoodItemId(
+                        $foodBevDb,
+                        $productId,
+                        (string) ($pricedCatalog['product_name'] ?? ('Product #' . $productId)),
+                        (float) $pricedCatalog['unit_price']
+                    );
+                    if ($fallbackItemId < 1) {
+                        throw new \RuntimeException('Could not map catalog product for session item.');
+                    }
+
+                    $vendorLine['food_beverage_item_id'] = $fallbackItemId;
+                    if ($visitFoodDb->insert($vendorLine) === false) {
+                        throw new \RuntimeException('Could not add catalog item to session.');
+                    }
+                }
+                if ($db->transStatus() === false) {
+                    throw new \RuntimeException(
+                        'Could not save catalog line. Last SQL: ' . $db->showLastQuery()
+                    );
+                }
+                if ($db->transComplete() === false) {
+                    throw new \RuntimeException(
+                        'Could not commit catalog line. Last SQL: ' . $db->showLastQuery()
+                    );
+                }
             } catch (\Throwable $e) {
-                // Backward-compatible fallback for environments where food_beverage_item_id is still NOT NULL.
-                $fallbackItemId = $this->resolveCatalogFoodItemId(
-                    $productId,
-                    (string) ($pricedCatalog['product_name'] ?? ('Product #' . $productId)),
-                    (float) $pricedCatalog['unit_price']
-                );
-                if ($fallbackItemId < 1) {
-                    return redirect()->back()->with('error', 'Could not map catalog product for session item.');
+                $db->transRollback();
+                $msg = $e->getMessage();
+                if ($msg === '__catalog_visit_food_insert__') {
+                    $msg = 'Could not add catalog item to session.';
                 }
 
-                $vendorLine['food_beverage_item_id'] = $fallbackItemId;
-                $ok = $this->visitFoodModel->insert($vendorLine);
-                if ($ok === false) {
-                    return redirect()->back()->with('error', 'Could not add catalog item to session.');
-                }
+                return redirect()->back()->with('error', $msg);
             }
+
+            $lineId = (int) $visitFoodDb->getInsertID();
+            if ($lineId < 1) {
+                return redirect()->back()->with('error', 'Could not confirm catalog line. Please try again.');
+            }
+
+            $db->transStart();
+            try {
+                GamingCatalogStockService::make($db)->deductFifoForGamingVisit(
+                    $productId,
+                    $qtyVendor,
+                    $visitId,
+                    'Gaming session #' . $visitId . ' (catalog)'
+                );
+                if ($db->transStatus() === false) {
+                    throw new \RuntimeException(
+                        'Inventory update failed. Last SQL: ' . $db->showLastQuery()
+                    );
+                }
+                if ($db->transComplete() === false) {
+                    throw new \RuntimeException(
+                        'Could not commit inventory. Last SQL: ' . $db->showLastQuery()
+                    );
+                }
+            } catch (\Throwable $e) {
+                $db->transRollback();
+                $visitFoodDb->delete($lineId);
+                $msg = $e->getMessage();
+
+                return redirect()->back()->with('error', $msg);
+            }
+
             $this->logActivity('gaming', 'visit_food_add', $visitId, 'Added catalog food/beverage to session #' . $visitId);
         }
         if ($itemId > 0 && $ownItem !== null) {
@@ -724,15 +799,15 @@ class Gaming extends BaseController
      * Find or create a synthetic food item representing a vendor catalog product.
      * Needed for deployments where gaming_visit_food_items.food_beverage_item_id is NOT NULL.
      */
-    protected function resolveCatalogFoodItemId(int $productId, string $productName, float $unitPrice): int
+    protected function resolveCatalogFoodItemId(FoodBeverageItemModel $fbModel, int $productId, string $productName, float $unitPrice): int
     {
         $syntheticName = '[Catalog] ' . trim($productName) . ' (#' . $productId . ')';
-        $existing = $this->foodBeverageItemModel->where('name', $syntheticName)->first();
+        $existing = $fbModel->where('name', $syntheticName)->first();
         if ($existing) {
             return (int) ($existing['id'] ?? 0);
         }
 
-        $id = $this->foodBeverageItemModel->insert([
+        $id = $fbModel->insert([
             'name'       => $syntheticName,
             'unit_label' => 'unit',
             'price'      => $unitPrice,

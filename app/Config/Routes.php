@@ -66,6 +66,7 @@ $routes->get('inventory/stock-batches/add', 'StockBatches::add', ['filter' => 'a
 $routes->post('inventory/stock-batches/create', 'StockBatches::create', ['filter' => 'admin']);
 $routes->get('inventory/stock-batches/edit/(:num)', 'StockBatches::edit/$1', ['filter' => 'admin']);
 $routes->post('inventory/stock-batches/update/(:num)', 'StockBatches::update/$1', ['filter' => 'admin']);
+$routes->post('inventory/stock-batches/delete/(:num)', 'StockBatches::delete/$1', ['filter' => 'admin']);
 
 // Gaming - Categories (gaming categories and modes) — admin only
 $routes->get('gaming/categories', 'Gaming::categories', ['filter' => 'admin']);

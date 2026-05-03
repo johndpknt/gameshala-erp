@@ -1,3 +1,4 @@
+<?php helper('form'); ?>
 <div class="container py-4 px-3 px-sm-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
         <h1 class="h4 fw-semibold mb-0">Stock Batches</h1>
@@ -58,7 +59,7 @@
                     <th class="text-end"><a href="<?= $batchSortUrl('unit_cost') ?>" class="text-dark text-decoration-none">Unit cost<?= $batchArrow('unit_cost') ?></a></th>
                     <th class="text-end"><a href="<?= $batchSortUrl('selling_price') ?>" class="text-dark text-decoration-none">Selling price<?= $batchArrow('selling_price') ?></a></th>
                     <th><a href="<?= $batchSortUrl('received_at') ?>" class="text-dark text-decoration-none">Received at<?= $batchArrow('received_at') ?></a></th>
-                    <th class="text-end" style="width: 100px;">Actions</th>
+                    <th class="text-end" style="width: 160px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -88,8 +89,12 @@
                                 echo ($sp !== null && $sp !== '') ? esc(number_format((float) $sp, 2)) : '—';
                             ?></td>
                             <td><?= esc(date('M j, Y', strtotime($b['received_at']))) ?></td>
-                            <td class="text-end">
+                            <td class="text-end text-nowrap">
                                 <a href="<?= base_url('inventory/stock-batches/edit/' . (int) $b['id']) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                <form method="post" action="<?= base_url('inventory/stock-batches/delete/' . (int) $b['id']) ?>" class="d-inline" onsubmit="return confirm('Delete this stock batch? This cannot be undone.');">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -8,7 +8,7 @@
 
     <?php
     $productBase = $listBase ?? base_url('catalog/products');
-    $activeTab = $activeTab ?? 'toy';
+    $activeTab = $activeTab ?? 'all';
     $productSortUrl = function ($col) use ($productBase, $searchQ, $sort, $order, $activeTab) {
         $next = ($sort === $col && $order === 'asc') ? 'desc' : 'asc';
         return $productBase . '?' . http_build_query(array_filter(['tab' => $activeTab, 'q' => $searchQ, 'sort' => $col, 'order' => $next]));
@@ -19,6 +19,9 @@
     };
     ?>
     <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'all' ? 'active' : '' ?>" href="<?= base_url('catalog/products?tab=all') ?>">All</a>
+        </li>
         <li class="nav-item">
             <a class="nav-link <?= $activeTab === 'toy' ? 'active' : '' ?>" href="<?= base_url('catalog/products?tab=toy') ?>">Toys</a>
         </li>
